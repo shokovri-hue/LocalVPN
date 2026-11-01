@@ -1,0 +1,61 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
+
+// Ключ подписи берётся из секретов GitHub (см. README). Без него сборка подписывается
+// временным отладочным ключом — такой APK ставится, но не обновляется поверх прошлой версии.
+val keystorePath: String? = System.getenv("LOCALVPN_KEYSTORE_FILE")
+val hasReleaseKey = keystorePath != null && file(keystorePath).exists()
+val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+
+android {
+    namespace = "app.localvpn"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "app.localvpn"
+        minSdk = 26
+        targetSdk = 34
+        versionCode = buildNumber
+        versionName = "1.0.$buildNumber"
+    }
+
+    signingConfigs {
+        create("release") {
+            if (hasReleaseKey) {
+                storeFile = file(keystorePath!!)
+                storePassword = System.getenv("LOCALVPN_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("LOCALVPN_KEY_ALIAS") ?: "localvpn"
+                keyPassword = System.getenv("LOCALVPN_KEY_PASSWORD") ?: System.getenv("LOCALVPN_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = if (hasReleaseKey) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true // нужно библиотеке WireGuard
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+}
+
+dependencies {
+    implementation("com.wireguard.android:tunnel:1.0.20230706")
+    implementation("androidx.activity:activity-ktx:1.9.1")
+    implementation("androidx.webkit:webkit:1.11.0")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+}

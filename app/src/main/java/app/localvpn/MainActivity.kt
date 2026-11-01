@@ -1,0 +1,213 @@
+package app.localvpn
+
+import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.net.VpnService
+import android.os.Build
+import android.os.Bundle
+import android.util.Base64
+import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.webkit.WebViewAssetLoader
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.Executors
+
+/**
+ * Окно приложения: интерфейс — это та же страница, что и в браузере (assets/index.html),
+ * а включение VPN, список программ и буфер обмена делает Kotlin через объект window.Android.
+ */
+class MainActivity : ComponentActivity() {
+
+    private lateinit var web: WebView
+    private var pendingName: String? = null
+    private var pendingConfig: String? = null
+
+    private val vpnPermission =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val name = pendingName
+            val config = pendingConfig
+            pendingName = null
+            pendingConfig = null
+            if (name == null || config == null) return@registerForActivityResult
+            if (result.resultCode == RESULT_OK) {
+                VpnController.apply(this, name, true, config, this@MainActivity::deliver)
+            } else {
+                deliver(VpnController.running(this), "Без разрешения Android не сможет включить VPN")
+            }
+        }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // Страница открывается с адреса https://appassets.androidplatform.net — так у неё
+        // постоянное хранилище (туннели не пропадают) и нет доступа к файлам телефона.
+        val assets = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+
+        web = WebView(this)
+        web.setBackgroundColor(getColor(R.color.screen_bg))
+        web.settings.javaScriptEnabled = true
+        web.settings.domStorageEnabled = true
+        web.settings.allowFileAccess = false
+        web.settings.allowContentAccess = false
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                assets.shouldInterceptRequest(request.url)
+
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                if (request.url.host == ASSET_HOST) return false
+                // Внешние ссылки открываем в браузере телефона
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                } catch (e: Exception) {
+                }
+                return true
+            }
+        }
+        web.addJavascriptInterface(Bridge(), "Android")
+        setContentView(web)
+
+        if (savedInstanceState != null) web.restoreState(savedInstanceState)
+        if (web.url == null) web.loadUrl("https://$ASSET_HOST/assets/index.html")
+
+        // Кнопка «Назад»: сначала её обрабатывает страница (закрыть окно, вернуться к списку)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                web.evaluateJavascript("(window.appBack ? window.appBack() : false)") { handled ->
+                    if (handled != "true") {
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                        isEnabled = true
+                    }
+                }
+            }
+        })
+
+        // Список приложений собираем заранее, чтобы окно выбора открывалось сразу
+        Executors.newSingleThreadExecutor().execute { installedAppsJson(applicationContext) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        web.evaluateJavascript("window.onAppResume && window.onAppResume()", null)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        web.saveState(outState)
+    }
+
+    override fun onDestroy() {
+        web.destroy()
+        super.onDestroy()
+    }
+
+    /** Передаёт странице состояние туннелей. */
+    private fun deliver(running: List<String>, error: String?) {
+        val js = "window.onTunnelState && window.onTunnelState(" +
+            JSONArray(running).toString() + ", " +
+            (if (error == null) "null" else JSONObject.quote(error)) + ")"
+        runOnUiThread {
+            if (!isDestroyed) web.evaluateJavascript(js, null)
+        }
+    }
+
+    /** Методы, которые страница вызывает как window.Android.имя(...). */
+    inner class Bridge {
+
+        @JavascriptInterface
+        fun getRunning(): String = JSONArray(VpnController.running(this@MainActivity)).toString()
+
+        @JavascriptInterface
+        fun setTunnel(name: String, on: Boolean, config: String) {
+            runOnUiThread {
+                if (on) {
+                    val ask = VpnService.prepare(this@MainActivity)
+                    if (ask != null) {
+                        // Android один раз спрашивает разрешение на VPN
+                        pendingName = name
+                        pendingConfig = config
+                        vpnPermission.launch(ask)
+                        return@runOnUiThread
+                    }
+                }
+                VpnController.apply(this@MainActivity, name, on, config, this@MainActivity::deliver)
+            }
+        }
+
+        @JavascriptInterface
+        fun getInstalledApps(): String = installedAppsJson(applicationContext)
+
+        @JavascriptInterface
+        fun isInstalled(pkg: String): Boolean = VpnController.isInstalled(this@MainActivity, pkg)
+
+        @JavascriptInterface
+        fun copy(text: String) {
+            runOnUiThread {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("LocalVPN", text))
+            }
+        }
+    }
+
+    companion object {
+        private const val ASSET_HOST = "appassets.androidplatform.net"
+        private const val ICON_SIZE = 72
+
+        @Volatile private var appsCache: String? = null
+
+        /** Приложения с иконкой на рабочем столе: название, имя пакета и иконка в PNG. */
+        @Synchronized
+        fun installedAppsJson(context: Context): String {
+            appsCache?.let { return it }
+            val pm = context.packageManager
+            val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val activities = if (Build.VERSION.SDK_INT >= 33) {
+                pm.queryIntentActivities(launcher, PackageManager.ResolveInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                pm.queryIntentActivities(launcher, 0)
+            }
+            val result = JSONArray()
+            activities
+                .distinctBy { it.activityInfo.packageName }
+                .filter { it.activityInfo.packageName != context.packageName }
+                .map { it to it.loadLabel(pm).toString() }
+                .sortedBy { it.second.lowercase() }
+                .forEach { (info, label) ->
+                    val item = JSONObject()
+                    item.put("n", label)
+                    item.put("p", info.activityInfo.packageName)
+                    try {
+                        val drawable = info.loadIcon(pm)
+                        val bitmap = Bitmap.createBitmap(ICON_SIZE, ICON_SIZE, Bitmap.Config.ARGB_8888)
+                        val canvas = Canvas(bitmap)
+                        drawable.setBounds(0, 0, ICON_SIZE, ICON_SIZE)
+                        drawable.draw(canvas)
+                        val png = ByteArrayOutputStream()
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, png)
+                        item.put("icon", "data:image/png;base64," + Base64.encodeToString(png.toByteArray(), Base64.NO_WRAP))
+                    } catch (e: Exception) {
+                    }
+                    result.put(item)
+                }
+            return result.toString().also { appsCache = it }
+        }
+    }
+}

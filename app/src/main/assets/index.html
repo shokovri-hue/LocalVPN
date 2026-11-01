@@ -1,0 +1,1052 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+@font-face{font-family:'Manrope';font-style:normal;font-display:swap;font-weight:200 800;src:url(fonts/manrope-latin-wght-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Manrope';font-style:normal;font-display:swap;font-weight:200 800;src:url(fonts/manrope-latin-ext-wght-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Manrope';font-style:normal;font-display:swap;font-weight:200 800;src:url(fonts/manrope-cyrillic-wght-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-display:swap;font-weight:100 800;src:url(fonts/jetbrains-mono-latin-wght-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-display:swap;font-weight:100 800;src:url(fonts/jetbrains-mono-latin-ext-wght-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-display:swap;font-weight:100 800;src:url(fonts/jetbrains-mono-cyrillic-wght-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px system-ui,-apple-system,sans-serif;-webkit-tap-highlight-color:transparent}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>Менеджер туннелей</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script src="js/nacl-fast.min.js"></script>
+<style>
+/* Layout: одноколоночное мобильное приложение, центрированное, экран списка ↔ экран редактора, плавающая кнопка «+» */
+:root{
+  --bg:#eef1f3; --surface:#ffffff; --fg:#17202a; --muted:#5f6b78; --line:#d9dfe5;
+  --accent:#b8322c; --accent-ink:#ffffff; --on:#1f8a5b; --field:#f5f7f9; --danger:#b8322c;
+  --display:"Manrope",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161b; --surface:#1b2128; --fg:#e7ecf1; --muted:#95a1ae; --line:#2c343e;
+  --accent:#e0524a; --accent-ink:#ffffff; --on:#3cc287; --field:#232a33; --danger:#ef6a62; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161b; --surface:#1b2128; --fg:#e7ecf1; --muted:#95a1ae; --line:#2c343e;
+  --accent:#e0524a; --accent-ink:#ffffff; --on:#3cc287; --field:#232a33; --danger:#ef6a62; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--display);font-size:15px}
+.app{max-width:560px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;position:relative}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);
+  display:flex;align-items:center;gap:12px;padding-block:18px 14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+header h1{font-size:22px;font-weight:800;margin:0;flex:1;letter-spacing:-.01em;text-wrap:balance}
+.iconbtn{border:0;background:transparent;color:var(--fg);width:40px;height:40px;border-radius:10px;display:grid;place-items:center;cursor:pointer}
+.iconbtn:hover{background:var(--field)}
+.textbtn{border:0;background:transparent;color:var(--accent);font:700 15px var(--display);padding:10px 12px;border-radius:10px;cursor:pointer}
+.textbtn:hover{background:var(--field)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{flex:1;padding-block:4px 120px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.row{display:flex;align-items:center;gap:14px;padding:14px 16px;border-top:1px solid var(--line);cursor:pointer}
+.row:first-child{border-top:0}
+.row:hover{background:var(--field)}
+.row .dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex:none}
+.row.on .dot{background:var(--on);box-shadow:0 0 0 4px color-mix(in srgb,var(--on) 20%,transparent)}
+.row .meta{flex:1;min-width:0}
+.row .name{font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .sub{font:12.5px var(--mono);color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hint{color:var(--muted);font-size:13px;margin:14px 4px 0}
+
+.switch{position:relative;width:46px;height:28px;flex:none}
+.switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}
+.switch span{position:absolute;inset:0;border-radius:99px;background:var(--line);transition:background .15s}
+.switch span::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .15s}
+.switch input:checked+span{background:var(--on)}
+.switch input:checked+span::after{transform:translateX(18px)}
+.switch input:disabled+span{opacity:.55}
+.switch input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+
+.empty{text-align:center;padding:64px 20px;color:var(--muted)}
+.empty svg{color:var(--line);margin-bottom:12px}
+.empty b{display:block;color:var(--fg);font-size:17px;margin-bottom:6px}
+
+.fab{position:fixed;z-index:6;width:60px;height:60px;border-radius:18px;border:0;cursor:pointer;
+  background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;
+  box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 40%,transparent);
+  right:max(20px, calc(50vw - 280px + 20px), calc(env(safe-area-inset-right,0px) + 20px));
+  bottom:calc(24px + env(safe-area-inset-bottom,0px));transition:transform .12s}
+.fab:hover{transform:translateY(-2px)}
+.fab:active{transform:scale(.96)}
+
+.modebar{position:fixed;z-index:6;height:60px;box-sizing:border-box;
+  left:max(16px, calc(50vw - 280px + 16px), calc(env(safe-area-inset-left,0px) + 16px));
+  right:calc(max(20px, calc(50vw - 280px + 20px), calc(env(safe-area-inset-right,0px) + 20px)) + 72px);
+  bottom:calc(24px + env(safe-area-inset-bottom,0px));
+  display:flex;align-items:center;gap:10px;padding:0 12px;
+  background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 22px rgba(0,0,0,.08)}
+.modebar .ml{flex:1;min-width:0;font:600 12.5px/1.25 var(--display);color:var(--muted);transition:color .15s}
+.modebar .ml.left{text-align:right}
+.modebar .ml.right{text-align:left;border:0;background:transparent;padding:4px 2px;cursor:pointer;border-radius:8px}
+.modebar .ml.active{color:var(--fg)}
+.modebar .ml .app{display:block;color:var(--accent);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modebar .switch input:checked+span{background:var(--accent)}
+.modebar .switch input:not(:checked)+span{background:var(--muted)}
+
+.sheet-wrap{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center;animation:lbIn .15s ease-out}
+.sheet{width:100%;max-width:560px;max-height:85%;display:flex;flex-direction:column;background:var(--bg);border-radius:20px 20px 0 0;box-sizing:border-box;
+  padding-top:10px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 12px}
+.sheet h3{margin:0 4px 4px;font-size:18px;font-weight:800}
+.sheet .lead{margin:0 4px 12px}
+.sheet .search{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:10px;padding:11px 12px;font:15px var(--display);margin-bottom:10px}
+.sheet .search:focus{outline:none;border-color:var(--accent)}
+.apps{overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;min-height:0}
+.apps .grp{padding:10px 14px 6px;font:700 11px var(--display);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);background:var(--field);border-top:1px solid var(--line)}
+.apps .grp:first-child{border-top:0}
+.apps .it{display:flex;align-items:center;border-top:1px solid var(--line)}
+.apps .grp + .it, .apps > .it:first-child{border-top:0}
+.apps .it.sel,.apps .it:hover{background:var(--field)}
+.apps .pick{flex:1;min-width:0;display:flex;align-items:center;gap:12px;border:0;background:transparent;color:var(--fg);text-align:left;padding:11px 6px 11px 14px;cursor:pointer;font:inherit}
+.apps .star{flex:none;width:44px;height:44px;margin-right:4px;border:0;background:transparent;border-radius:10px;color:var(--muted);display:grid;place-items:center;cursor:pointer}
+.apps .star:hover{color:var(--fg)}
+.apps .star.on{color:#e0a800}
+.sortbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:10px}
+.seg{display:inline-flex;padding:3px;border-radius:10px;background:var(--field);border:1px solid var(--line)}
+.seg button{border:0;background:transparent;color:var(--muted);font:600 13px var(--display);padding:7px 12px;border-radius:7px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.sortbar .small{padding:8px 10px}
+.sortbar .favcount{margin-left:auto;font-size:12.5px;color:var(--muted)}
+.apps img.av{object-fit:cover;background:transparent}
+.apps .av{flex:none;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font:800 15px var(--display);color:#fff}
+.apps .nm{flex:1;min-width:0}
+.apps .nm b{display:block;font-size:15px}
+.apps .nm small{display:block;font:12px var(--mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apps .tick{color:var(--accent);flex:none}
+.apps .none{padding:16px;color:var(--muted);text-align:center}
+.custom{display:flex;gap:8px;margin-top:10px}
+.custom input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:10px;padding:10px 12px;font:13.5px var(--mono)}
+.custom input:focus{outline:none;border-color:var(--accent)}
+.sheet .err{margin:6px 4px 0}
+.sheet .cancel{margin-top:12px;width:100%;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:700 15px var(--display);padding:13px;border-radius:12px;cursor:pointer}
+.menu{position:fixed;z-index:7;right:max(20px,calc(50vw - 280px + 20px));bottom:calc(96px + env(safe-area-inset-bottom,0px));
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.18);overflow:hidden;min-width:240px}
+.menu button{display:flex;gap:12px;align-items:center;width:100%;border:0;background:transparent;color:var(--fg);font:600 14.5px var(--display);padding:14px 16px;cursor:pointer;text-align:left}
+.menu button+button{border-top:1px solid var(--line)}
+.menu button:hover{background:var(--field)}
+
+/* editor */
+.section{margin-bottom:22px}
+.section h2{font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 4px 8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px 16px}
+.field{padding:12px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.field:first-child{border-top:0}
+.field label{font-size:13px;font-weight:600;color:var(--muted)}
+.field .inline{display:flex;gap:8px;align-items:center}
+.field input{flex:1;min-width:0;border:1px solid transparent;background:var(--field);color:var(--fg);border-radius:9px;padding:10px 12px;font:14px var(--mono)}
+.field input.text{font-family:var(--display);font-size:15px}
+.field input:focus{outline:none;border-color:var(--accent)}
+.field input[readonly]{color:var(--muted);cursor:default}
+.field input.bad{border-color:var(--danger)}
+.err{color:var(--danger);font-size:12.5px}
+.small{border:1px solid var(--line);background:var(--surface);color:var(--fg);font:600 13px var(--display);padding:9px 12px;border-radius:9px;cursor:pointer;white-space:nowrap}
+.small:hover{background:var(--field)}
+.danger{width:100%;border:1px solid var(--line);background:var(--surface);color:var(--danger);font:700 15px var(--display);padding:14px;border-radius:14px;cursor:pointer}
+.danger:hover{background:var(--field)}
+.topmenu{position:absolute;top:calc(100% - 6px);right:max(16px,env(safe-area-inset-right,0px));z-index:8;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.18);overflow:hidden;min-width:240px}
+.topmenu button{display:flex;gap:12px;align-items:center;width:100%;border:0;background:transparent;color:var(--fg);font:600 14.5px var(--display);padding:14px 16px;cursor:pointer;text-align:left}
+.topmenu button:hover{background:var(--field)}
+.topmenu button+button{border-top:1px solid var(--line)}
+.lead{color:var(--muted);margin:0 4px 20px;line-height:1.5}
+.faq{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.faq details+details{border-top:1px solid var(--line)}
+.faq summary{list-style:none;display:flex;align-items:center;gap:12px;padding:15px 16px;cursor:pointer;font-weight:700;font-size:15.5px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary span{flex:1;min-width:0}
+.faq summary:hover{background:var(--field)}
+.faq .chev{color:var(--muted);flex:none;transition:transform .15s}
+.faq details[open] .chev{transform:rotate(180deg)}
+.faq .ans{padding:0 16px 16px;line-height:1.6;max-width:65ch}
+.faq .ans p{margin:0}
+.faq code{font:13px var(--mono);background:var(--field);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+.faq .ex{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin-top:12px}
+.faq .ex span{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.faq .ex code{color:var(--accent)}
+.examples{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+.shot{margin:0;display:flex;flex-direction:column;gap:12px;min-width:0}
+.shot .frame{border:6px solid var(--line);border-radius:26px;overflow:hidden;background:var(--bg);box-shadow:0 10px 26px rgba(0,0,0,.10)}
+.shot .frame{position:relative;display:block;width:100%;padding:0;margin:0;font:inherit;color:inherit;cursor:zoom-in;transition:transform .15s,box-shadow .15s}
+.shot .frame:hover{transform:translateY(-2px);box-shadow:0 14px 32px rgba(0,0,0,.16)}
+.shot .zoom{position:absolute;right:10px;bottom:10px;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;
+  background:var(--fg);color:var(--bg);opacity:.82}
+.shot svg{display:block;width:100%;height:auto;pointer-events:none;user-select:none}
+
+.lightbox{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;
+  background:color-mix(in srgb,var(--bg) 88%,#000);
+  padding-top:calc(12px + env(safe-area-inset-top,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  animation:lbIn .18s ease-out}
+@keyframes lbIn{from{opacity:0}to{opacity:1}}
+.lb-top{display:flex;align-items:center;gap:12px;max-width:760px;width:100%;margin:0 auto 12px}
+.lb-cap{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.lb-cap b{font-size:17px;font-weight:800}
+.lb-cap span{color:var(--muted);font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-close{flex:none;width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);display:grid;place-items:center;cursor:pointer}
+.lb-close:hover{background:var(--field)}
+.lb-body{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+.lb-body svg{height:100%;width:auto;max-width:100%;max-height:100%;border-radius:20px;border:6px solid var(--line);box-shadow:0 20px 50px rgba(0,0,0,.3);cursor:default;box-sizing:border-box}
+@media (prefers-reduced-motion: reduce){.lightbox{animation:none}}
+.shot figcaption{font-size:13.5px;line-height:1.55;color:var(--muted);padding:0 4px}
+.shot figcaption b{display:block;color:var(--fg);font-size:14.5px;margin-bottom:4px}
+.sv-bg{fill:var(--bg)}
+.sv-card{fill:var(--surface);stroke:var(--line)}
+.sv-line{stroke:var(--line)}
+.sv-stroke{fill:none;stroke:var(--fg);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.sv-title{font:800 19px var(--display);fill:var(--fg)}
+.sv-action{font:700 14px var(--display);fill:var(--accent)}
+.sv-sec{font:700 10.5px var(--display);letter-spacing:1px;fill:var(--muted)}
+.sv-label{font:600 11px var(--display);fill:var(--muted)}
+.sv-val{font:12px var(--mono);fill:var(--fg)}
+.sv-val.sv-long{font-size:10.4px}
+.confpaste{display:flex;flex-direction:column;gap:6px}
+.confpaste textarea{width:100%;box-sizing:border-box;min-height:110px;border:1px dashed var(--line);background:var(--field);color:var(--fg);border-radius:9px;padding:10px 12px;font:12.5px/1.55 var(--mono);resize:vertical}
+.confpaste textarea:focus{outline:none;border-color:var(--accent);border-style:solid}
+.pastenote{font-size:12.5px;color:var(--muted);line-height:1.45}
+.pastenote.bad{color:var(--danger)}
+.adv{margin:6px -16px -4px;border-top:1px solid var(--line);background:var(--field);border-radius:0 0 13px 13px}
+.subhead{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;cursor:pointer;text-align:left;
+  padding:14px 16px;border-radius:0 0 13px 13px;font:700 11px var(--display);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.adv.open .subhead{border-radius:0;padding-bottom:4px}
+.subhead:hover{color:var(--fg)}
+.subhead .cnt{flex:1;text-transform:none;letter-spacing:0;font:500 12.5px var(--display);opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adv.open .subhead .cnt{visibility:hidden}
+.subhead .chev{flex:none;transition:transform .15s}
+.adv.open .subhead .chev{transform:rotate(180deg)}
+.adv .body{padding:0 16px 12px}
+.adv .body .field:first-child{border-top:0}
+.field.sub input{background:var(--surface)}
+.card.ap{padding:6px 16px}
+.card.ap p{margin:0;padding:14px 0;font-size:15.5px;line-height:1.5}
+.card.ap p+p{border-top:1px solid var(--line)}
+.card.ap code{font:600 14.5px var(--mono);color:var(--accent);background:var(--field);padding:2px 7px;border-radius:6px;white-space:nowrap}
+.sechead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 4px 8px}
+.sechead h2{margin:0}
+.linkbtn{border:0;background:transparent;color:var(--danger);font:600 13px var(--display);cursor:pointer;padding:2px 4px;border-radius:6px}
+.linkbtn:hover{text-decoration:underline}
+.opt{font-weight:500;opacity:.75;margin-left:4px}
+.addpeer{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-bottom:22px;border:1.5px dashed var(--line);background:transparent;color:var(--accent);font:700 15px var(--display);padding:14px;border-radius:14px;cursor:pointer}
+.addpeer:hover{background:var(--surface);border-color:var(--accent)}
+.danger.confirm{background:var(--danger);color:#fff;border-color:var(--danger)}
+
+pre.conf{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;font:13px/1.65 var(--mono);overflow-x:auto;white-space:pre}
+pre.conf .k{color:var(--accent)}
+pre.conf .s{color:var(--muted);font-weight:500}
+textarea.import{width:100%;box-sizing:border-box;min-height:220px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:14px;padding:14px;font:13px/1.6 var(--mono);resize:vertical}
+textarea.import:focus{outline:none;border-color:var(--accent)}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;text-align:center;line-height:1.4;bottom:calc(100px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;z-index:20}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<div class="app" id="app"></div>
+<div class="toast" id="toast" hidden></div>
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Пример туннеля" hidden></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const app = $('#app');
+const STORE = 'tunnels.v1';
+
+// ---------- ключи ----------
+const b64e = u8 => btoa(String.fromCharCode(...u8));
+const b64d = s => { const b = atob(s); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+function genPrivate(){
+  const k = nacl.randomBytes(32);
+  k[0] &= 248; k[31] &= 127; k[31] |= 64; // клэмпинг Curve25519, как у wg genkey
+  return b64e(k);
+}
+function pubFromPriv(priv){
+  try{
+    const k = b64d(priv.trim());
+    if(k.length !== 32) return null;
+    return b64e(nacl.scalarMult.base(k));
+  }catch(e){ return null; }
+}
+
+// ---------- проверки ----------
+const isCidrList = v => v.split(',').map(s=>s.trim()).filter(Boolean).length>0 &&
+  v.split(',').map(s=>s.trim()).filter(Boolean).every(a=>/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(a) || /^[0-9a-f:]+\/\d{1,3}$/i.test(a));
+const isIpList = v => v.split(',').map(s=>s.trim()).filter(Boolean).every(a=>/^(\d{1,3}\.){3}\d{1,3}$/.test(a) || /^[0-9a-f:]+$/i.test(a) || /^[a-z0-9.-]+$/i.test(a));
+const isName = v => /^[a-zA-Z0-9_=+.-]{1,15}$/.test(v);
+const isKey = v => { try{ return b64d(v.trim()).length===32 && /^[A-Za-z0-9+/]{43}=$/.test(v.trim()); }catch(e){ return false; } };
+const isEndpoint = v => /^(\[[0-9a-f:]+\]|[a-z0-9.-]+):\d{1,5}$/i.test(v.trim()) && +v.trim().split(':').pop()<65536;
+// Достаёт данные первого пира из текста .conf (или из одного раздела [Peer])
+function peerFromConf(txt){
+  const parts = txt.split(/^\s*\[Peer\]\s*$/mi);
+  const src = parts.length > 1 ? parts[1] : txt; // в [Interface] строки PublicKey нет, поэтому без [Peer] ищем по всему тексту
+  const get = k => ((src.match(new RegExp('^[ \\t]*'+k+'[ \\t]*=[ \\t]*(.*)$','mi'))||[])[1]||'').replace(/\s#.*$/,'').trim();
+  let pub = get('PublicKey');
+  if(!pub && isKey(txt)) pub = txt.trim();          // вставили просто ключ
+  if(!isKey(pub)) return null;
+  return {pub, psk:get('PresharedKey'), endpoint:get('Endpoint'), allowed:get('AllowedIPs'), keepalive:get('PersistentKeepalive')};
+}
+const newPeer = () => ({pub:'', psk:'', endpoint:'', allowed:'0.0.0.0/0, ::/0', keepalive:''});
+
+// ---------- данные ----------
+let tunnels = load();
+function load(){
+  try{
+    const d = JSON.parse(localStorage.getItem(STORE));
+    if(Array.isArray(d)){
+      const own = d.filter(t=>!t.example); // примеры из прошлых версий убираем
+      own.forEach(t=>{ if(!Array.isArray(t.peers)) t.peers=[]; });
+      if(own.length!==d.length) try{ localStorage.setItem(STORE, JSON.stringify(own)); }catch(e){}
+      return own;
+    }
+  }catch(e){}
+  return [];
+}
+function save(){ try{ localStorage.setItem(STORE, JSON.stringify(tunnels, (k,v)=> k==='pending' ? undefined : v)); }catch(e){} }
+function uid(){ return Math.random().toString(36).slice(2,10); }
+
+// Режим маршрутизации: весь трафик устройства или одно приложение (IncludedApplications в WireGuard для Android)
+const APPS = [
+  {n:'Telegram', p:'org.telegram.messenger', c:'#2a9fd6'},
+  {n:'WhatsApp', p:'com.whatsapp', c:'#25a35a'},
+  {n:'YouTube', p:'com.google.android.youtube', c:'#d93025'},
+  {n:'Google Chrome', p:'com.android.chrome', c:'#3b78e7'},
+  {n:'Firefox', p:'org.mozilla.firefox', c:'#e8622c'},
+  {n:'Instagram', p:'com.instagram.android', c:'#c13584'},
+  {n:'Facebook', p:'com.facebook.katana', c:'#1877f2'},
+  {n:'Discord', p:'com.discord', c:'#5865f2'},
+  {n:'Spotify', p:'com.spotify.music', c:'#1aa34a'},
+  {n:'X (Twitter)', p:'com.twitter.android', c:'#4a4f55'},
+  {n:'Netflix', p:'com.netflix.mediaclient', c:'#b20710'},
+  {n:'TikTok', p:'com.zhiliaoapp.musically', c:'#222831'},
+  {n:'VK', p:'com.vkontakte.android', c:'#2c6fd1'},
+  {n:'Яндекс (Yandex)', p:'com.yandex.searchapp', c:'#e5352b'},
+  {n:'Brawl Stars', p:'com.supercell.brawlstars', c:'#e0a800'},
+  {n:'Roblox', p:'com.roblox.client', c:'#3d4450'},
+  {n:'Minecraft', p:'com.mojang.minecraftpe', c:'#5b8c32'},
+  {n:'MultiCraft', p:'com.multicraft.game', c:'#7a5a36'},
+];
+// ===== Мост к Android-приложению (в браузере window.Android нет, всё работает как раньше) =====
+const NATIVE = window.Android || null;
+let installedApps = null; // в приложении — реальный список установленных программ
+function srcApps(){
+  if(!NATIVE) return APPS;
+  if(!installedApps){
+    try{
+      installedApps = JSON.parse(NATIVE.getInstalledApps()).map(a => {
+        const known = APPS.find(k => k.p === a.p);
+        return {n:a.n, p:a.p, icon:a.icon || '', c: known ? known.c : '#6b7785'};
+      });
+    }catch(e){ installedApps = APPS; }
+  }
+  return installedApps;
+}
+const findApp = p => srcApps().find(a => a.p === p);
+// Включает/выключает туннель. В браузере — только отметка, в приложении — настоящее подключение.
+function setTunnelOn(id, on){
+  const t = tunnels.find(x => x.id === id); if(!t) return;
+  if(!NATIVE){
+    tunnels.forEach(x => x.on = x.id === id ? on : false);
+    save(); render(); toast(on ? 'Туннель включён' : 'Туннель выключен');
+    return;
+  }
+  t.pending = true; render();
+  NATIVE.setTunnel(t.name, on, on ? confText(t) : '');
+}
+// Ответ от Android: running — имена работающих туннелей, error — текст ошибки или null
+window.onTunnelState = (running, error) => {
+  running = Array.isArray(running) ? running : [];
+  tunnels.forEach(x => { x.pending = false; x.on = running.includes(x.name); });
+  save(); render();
+  if(error) toast(error); else toast(running.length ? 'VPN подключён' : 'VPN отключён');
+};
+// После изменения настроек работающего туннеля переподключаем его с новым конфигом
+function reapplyRunning(oldName){
+  if(!NATIVE) return;
+  const t = tunnels.find(x => x.on); if(!t) return;
+  if(oldName && oldName !== t.name) NATIVE.setTunnel(oldName, false, '');
+  t.pending = true;
+  NATIVE.setTunnel(t.name, true, confText(t));
+}
+function syncRunning(){
+  if(!NATIVE) return;
+  try{
+    const running = JSON.parse(NATIVE.getRunning());
+    tunnels.forEach(t => { t.on = running.includes(t.name); t.pending = false; });
+  }catch(e){}
+}
+// Кнопка «Назад» на телефоне. Возвращает true, если обработали сами.
+window.appBack = () => {
+  const sheet = document.querySelector('.sheet-wrap');
+  if(sheet){ sheet.querySelector('#app-cancel')?.click(); return true; }
+  if(!$('#lightbox').hidden){ closeLightbox(); return true; }
+  const open = ['#menu','#topmenu'].map(s=>$(s)).find(m=>m && !m.hidden);
+  if(open){ open.hidden = true; return true; }
+  if(view.name === 'list') return false;
+  const back = $('#back'); if(back){ back.click(); return true; }
+  go({name:'list'}); return true;
+};
+window.onAppResume = () => { syncRunning(); if(view.name==='list' || view.name==='detail') render(); };
+
+const isPkg = v => /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(v.trim());
+let route = {mode:'all', app:null};
+try{ const r = JSON.parse(localStorage.getItem('tunnels.route')); if(r && (r.mode==='all' || (r.mode==='app' && r.app?.p))) route = r; }catch(e){}
+let appPrefs = {sort:'abc', fav:[]};
+try{ const p = JSON.parse(localStorage.getItem('tunnels.apps')); if(p){ appPrefs.sort = p.sort==='rnd'?'rnd':'abc'; appPrefs.fav = Array.isArray(p.fav)?p.fav:[]; } }catch(e){}
+function saveAppPrefs(){ try{ localStorage.setItem('tunnels.apps', JSON.stringify(appPrefs)); }catch(e){} }
+let shuffleOrder = null; // случайный порядок держится, пока его не перемешают заново
+function reshuffle(){
+  const a = srcApps().map(x=>x.p);
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  shuffleOrder = a;
+}
+function orderedApps(){
+  if(appPrefs.sort==='rnd'){
+    if(!shuffleOrder || shuffleOrder.length!==srcApps().length) reshuffle();
+    return shuffleOrder.map(p=>findApp(p)).filter(Boolean);
+  }
+  return [...srcApps()].sort((x,y)=>x.n.localeCompare(y.n,'ru',{sensitivity:'base'}));
+}
+function saveRoute(){ try{ localStorage.setItem('tunnels.route', JSON.stringify(route)); }catch(e){} }
+
+let view = {name:'list'};
+function go(v){ view = v; render(); window.scrollTo(0,0); }
+
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.h); toast.h = setTimeout(()=>t.hidden = true, Math.max(1800, msg.length * 60)); // длинные ошибки висят дольше
+}
+const esc = s => String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const ICON = {
+  plus:'<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  back:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  shield:'<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg>',
+  new:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M3 12h18"/></svg>',
+  more:'<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  pin:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>',
+  help:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.4"/><circle cx="12" cy="17" r=".6" fill="currentColor"/></svg>',
+  file:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H6v18h12V7l-4-4z"/><path d="M14 3v4h4"/></svg>',
+};
+
+// ---------- экраны ----------
+function render(){
+  if(view.name==='list') renderList();
+  else if(view.name==='edit') renderEdit();
+  else if(view.name==='detail') renderDetail();
+  else if(view.name==='import') renderImport();
+  else if(view.name==='faq') renderFaq();
+  else if(view.name==='addrport') renderAddrPort();
+}
+
+function renderList(){
+  app.innerHTML = `
+    <header><h1>Туннели</h1>
+      <button class="iconbtn" id="more" aria-label="Ещё" aria-haspopup="true" aria-expanded="false">${ICON.more}</button>
+      <div class="topmenu" id="topmenu" hidden>
+        <button id="m-faq">${ICON.help} FAQ: как создать туннель</button>
+        <button id="m-ap">${ICON.pin} Адрес и порт</button>
+      </div>
+    </header>
+    <main>
+      ${tunnels.length ? `<div class="list">${tunnels.map(t=>`
+        <div class="row ${t.on?'on':''}" data-id="${t.id}" tabindex="0">
+          <span class="dot"></span>
+          <div class="meta">
+            <div class="name">${esc(t.name)}</div>
+            <div class="sub">${esc(t.peers?.[0]?.endpoint || t.address)}${t.pending?' · подождите…':t.on?' · подключён':''}</div>
+          </div>
+          <label class="switch" title="Включить туннель"><input type="checkbox" id="sw-${t.id}" ${t.on?'checked':''} ${t.pending?'disabled':''} aria-label="Включить ${esc(t.name)}"><span></span></label>
+        </div>`).join('')}</div>`
+      : `<div class="empty">${ICON.shield}<b>Туннелей пока нет</b>Нажмите «+», чтобы создать первый.
+          <div><button type="button" class="small" id="see-ex" style="margin-top:18px">Посмотреть примеры</button></div></div>`}
+    </main>
+    <div class="modebar">
+      <span class="ml left ${route.mode==='all'?'active':''}">VPN для всего устройства</span>
+      <label class="switch" title="Переключить режим"><input type="checkbox" id="route-sw" ${route.mode==='app'?'checked':''} aria-label="Только для одного приложения"><span></span></label>
+      <button type="button" class="ml right ${route.mode==='app'?'active':''}" id="route-app">${route.mode==='app'
+        ? `Для одного приложения<span class="app">${esc(route.app.n)}</span>`
+        : 'Выбрать для одного приложения'}</button>
+    </div>
+    <button class="fab" id="fab" aria-label="Добавить туннель">${ICON.plus}</button>
+    <div class="menu" id="menu" hidden>
+      <button id="m-new">${ICON.new} Создать с нуля</button>
+      <button id="m-imp">${ICON.file} Импорт из текста .conf</button>
+    </div>`;
+
+  app.querySelectorAll('.row').forEach(r=>{
+    const id = r.dataset.id;
+    r.addEventListener('click', e=>{ if(e.target.closest('.switch')) return; go({name:'detail', id}); });
+    r.addEventListener('keydown', e=>{ if(e.key==='Enter') go({name:'detail', id}); });
+    r.querySelector('input').addEventListener('change', e=> setTunnelOn(id, e.target.checked)); // одновременно активен только один
+  });
+  const menu = $('#menu'), top = $('#topmenu'), more = $('#more');
+  $('#fab').onclick = e => { e.stopPropagation(); top.hidden = true; menu.hidden = !menu.hidden; };
+  more.onclick = e => { e.stopPropagation(); menu.hidden = true; top.hidden = !top.hidden; more.setAttribute('aria-expanded', !top.hidden); };
+  document.onclick = e => { if(!e.target.closest('#menu')) menu.hidden = true; if(!e.target.closest('#topmenu')){ top.hidden = true; more.setAttribute('aria-expanded','false'); } };
+  $('#m-faq').onclick = () => go({name:'faq'});
+  $('#route-sw').onchange = e => {
+    if(e.target.checked) openAppPicker(()=>{ e.target.checked = false; });
+    else { route = {mode:'all', app:null}; saveRoute(); renderList(); toast('VPN для всего устройства'); reapplyRunning(); }
+  };
+  $('#route-app').onclick = () => openAppPicker();
+  $('#m-ap').onclick = () => go({name:'addrport'});
+  const seeEx = $('#see-ex'); if(seeEx) seeEx.onclick = () => { go({name:'faq'}); $('#examples')?.scrollIntoView(); };
+  $('#m-new').onclick = () => go({name:'edit', id:null});
+  $('#m-imp').onclick = () => go({name:'import'});
+}
+
+function openAppPicker(onCancel){
+  const wrap = document.createElement('div');
+  wrap.className = 'sheet-wrap';
+  wrap.innerHTML = `
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-t">
+      <div class="grab"></div>
+      <h3 id="sh-t">Выберите приложение</h3>
+      <p class="lead">Через VPN пойдёт трафик только этого приложения. Остальные будут работать напрямую.</p>
+      <input class="search" id="app-q" placeholder="Поиск по названию" autocomplete="off">
+      <div class="sortbar">
+        <div class="seg" role="group" aria-label="Порядок приложений">
+          <button type="button" data-sort="abc">По алфавиту</button>
+          <button type="button" data-sort="rnd">Случайно</button>
+        </div>
+        <button type="button" class="small" id="app-shuffle" title="Перемешать ещё раз" aria-label="Перемешать ещё раз">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
+        <span class="favcount" id="app-favc"></span>
+      </div>
+      <div class="apps" id="app-list"></div>
+      <div class="custom"><input id="app-pkg" placeholder="другое: имя пакета, com.example.app" spellcheck="false" autocomplete="off"><button type="button" class="small" id="app-add">Выбрать</button></div>
+      <span class="err" id="app-err" hidden>Имя пакета выглядит как com.example.app. Его можно найти в адресе приложения в Google Play после id=</span>
+      <button type="button" class="cancel" id="app-cancel">Отмена</button>
+    </div>`;
+  document.body.appendChild(wrap);
+  document.documentElement.style.overflow = 'hidden';
+  const list = wrap.querySelector('#app-list');
+  const close = (chosen) => {
+    wrap.remove(); document.documentElement.style.overflow = ''; document.removeEventListener('keydown', onKey);
+    if(!chosen && onCancel) onCancel();
+  };
+  const pick = app => {
+    route = {mode:'app', app:{n:app.n, p:app.p, c:app.c}}; saveRoute(); close(true); renderList(); reapplyRunning();
+    toast('VPN только для ' + app.n);
+  };
+  const STAR = on => `<svg width="20" height="20" viewBox="0 0 24 24" fill="${on?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>`;
+  const row = a => {
+    const sel = route.app?.p===a.p, fav = appPrefs.fav.includes(a.p);
+    return `<div class="it${sel?' sel':''}">
+      <button type="button" class="pick" data-p="${a.p}">
+        ${a.icon ? `<img class="av" src="${a.icon}" alt="">` : `<span class="av" style="background:${a.c}">${esc(a.n[0])}</span>`}
+        <span class="nm"><b>${esc(a.n)}</b><small>${a.p}</small></span>
+        ${sel?'<svg class="tick" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>':''}
+      </button>
+      <button type="button" class="star${fav?' on':''}" data-fav="${a.p}" aria-pressed="${fav}" aria-label="${fav?'Убрать из избранного':'Добавить в избранное'}: ${esc(a.n)}">${STAR(fav)}</button>
+    </div>`;
+  };
+  const draw = q => {
+    q = (q ?? wrap.querySelector('#app-q').value).trim().toLowerCase();
+    const items = orderedApps().filter(a => !q || a.n.toLowerCase().includes(q) || a.p.includes(q));
+    const favs = items.filter(a => appPrefs.fav.includes(a.p)), rest = items.filter(a => !appPrefs.fav.includes(a.p));
+    let html = '';
+    if(favs.length) html += `<div class="grp">Избранное</div>` + favs.map(row).join('') + (rest.length ? `<div class="grp">Все приложения</div>` : '');
+    html += rest.map(row).join('');
+    const scroll = list.scrollTop;
+    list.innerHTML = items.length ? html : '<div class="none">Ничего не найдено. Введите имя пакета ниже.</div>';
+    list.scrollTop = scroll;
+    list.querySelectorAll('.pick').forEach(b => b.onclick = () => pick(findApp(b.dataset.p)));
+    list.querySelectorAll('.star').forEach(b => b.onclick = () => {
+      const p = b.dataset.fav, i = appPrefs.fav.indexOf(p);
+      if(i<0) appPrefs.fav.push(p); else appPrefs.fav.splice(i,1);
+      saveAppPrefs(); draw();
+      list.querySelector(`[data-fav="${p}"]`)?.focus();
+    });
+    wrap.querySelectorAll('[data-sort]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sort===appPrefs.sort));
+    wrap.querySelector('#app-shuffle').hidden = appPrefs.sort!=='rnd';
+    const n = appPrefs.fav.filter(p=>srcApps().some(a=>a.p===p)).length;
+    wrap.querySelector('#app-favc').textContent = n ? `★ ${n} в избранном` : 'Нажмите ☆, чтобы добавить в избранное';
+  };
+  wrap.querySelectorAll('[data-sort]').forEach(b => b.onclick = () => {
+    if(b.dataset.sort==='rnd' && appPrefs.sort==='rnd') return;
+    appPrefs.sort = b.dataset.sort; if(appPrefs.sort==='rnd') reshuffle();
+    saveAppPrefs(); list.scrollTop = 0; draw();
+  });
+  wrap.querySelector('#app-shuffle').onclick = () => { reshuffle(); list.scrollTop = 0; draw(); };
+  draw('');
+  wrap.querySelector('#app-q').oninput = e => draw(e.target.value);
+  wrap.querySelector('#app-add').onclick = () => {
+    const v = wrap.querySelector('#app-pkg').value.trim();
+    if(!isPkg(v)){ wrap.querySelector('#app-err').hidden = false; wrap.querySelector('#app-pkg').focus(); return; }
+    if(NATIVE && !NATIVE.isInstalled(v)){ const er = wrap.querySelector('#app-err'); er.textContent = 'Приложение с таким именем пакета не установлено на телефоне'; er.hidden = false; return; }
+    pick(findApp(v) || {n:v, p:v, c:'#6b7785'});
+  };
+  wrap.querySelector('#app-cancel').onclick = () => close(false);
+  wrap.onclick = e => { if(e.target === wrap) close(false); };
+  const onKey = e => { if(e.key === 'Escape') close(false); };
+  document.addEventListener('keydown', onKey);
+  wrap.querySelector('#app-q').focus();
+}
+
+function confText(t){
+  const pub = pubFromPriv(t.priv) || '';
+  let s = `[Interface]\n# Name = ${t.name}\nPrivateKey = ${t.priv}\n# PublicKey = ${pub}\nAddress = ${t.address}\n`;
+  if(t.port) s += `ListenPort = ${t.port}\n`;
+  if(t.dns) s += `DNS = ${t.dns}\n`;
+  if(t.mtu) s += `MTU = ${t.mtu}\n`;
+  if(route.mode==='app') s += `# Только для приложения: ${route.app.n}\nIncludedApplications = ${route.app.p}\n`;
+  for(const p of (t.peers||[])){
+    s += `\n[Peer]\nPublicKey = ${p.pub}\n`;
+    if(p.psk) s += `PresharedKey = ${p.psk}\n`;
+    if(p.endpoint) s += `Endpoint = ${p.endpoint}\n`;
+    s += `AllowedIPs = ${p.allowed}\n`;
+    if(p.keepalive) s += `PersistentKeepalive = ${p.keepalive}\n`;
+  }
+  return s;
+}
+function confHtml(t){
+  return esc(confText(t)).split('\n').map(l=>{
+    if(/^\[.*\]$/.test(l)) return `<span class="s">${l}</span>`;
+    const m = l.match(/^(#?\s?\w+)( = )(.*)$/);
+    return m ? `<span class="k">${m[1]}</span>${m[2]}${m[3]}` : l;
+  }).join('\n');
+}
+
+function renderDetail(){
+  const t = tunnels.find(x=>x.id===view.id); if(!t) return go({name:'list'});
+  const pub = pubFromPriv(t.priv) || '—';
+  app.innerHTML = `
+    <header>
+      <button class="iconbtn" id="back" aria-label="Назад">${ICON.back}</button>
+      <h1>${esc(t.name)}</h1>
+      <button class="textbtn" id="edit">Изменить</button>
+    </header>
+    <main>
+      <div class="section"><h2>Интерфейс</h2>
+        <div class="card">
+          <div class="field"><label>Через VPN идёт</label><input readonly value="${route.mode==='app' ? 'только ' + esc(route.app.n) : 'весь трафик устройства'}"></div>
+          <div class="field"><label>Статус</label><div class="inline" style="justify-content:space-between">
+            <span style="font-weight:700;color:${t.on?'var(--on)':'var(--muted)'}">${t.pending?'Подождите…':t.on?'Подключён':'Отключён'}</span>
+            <label class="switch"><input type="checkbox" id="dsw" ${t.on?'checked':''} ${t.pending?'disabled':''} aria-label="Включить туннель"><span></span></label></div></div>
+          <div class="field"><label>Публичный ключ</label><div class="inline"><input id="d-pub" readonly value="${esc(pub)}"><button class="small" id="cp-pub">Копировать</button></div></div>
+          <div class="field"><label>Адрес</label><input readonly value="${esc(t.address)}"></div>
+          <div class="field"><label>Порт</label><input readonly value="${esc(t.port||'автоматически')}"></div>
+          ${advBlock('d', advSummary(t), `
+            <div class="field sub"><label>MTU</label><input readonly value="${esc(t.mtu||'автоматически')}"></div>
+            <div class="field sub"><label>DNS-серверы</label><input readonly value="${esc(t.dns||'—')}"></div>`)}
+        </div></div>
+      ${(t.peers||[]).map((p,i)=>`
+      <div class="section"><h2>Пир${t.peers.length>1?' '+(i+1):''}</h2>
+        <div class="card">
+          <div class="field"><label>Публичный ключ</label><input readonly value="${esc(p.pub)}"></div>
+          <div class="field"><label>Общий ключ</label><input readonly value="${p.psk?'задан':'не задан'}"></div>
+          <div class="field"><label>Endpoint</label><input readonly value="${esc(p.endpoint||'—')}"></div>
+          <div class="field"><label>Разрешённые IP</label><input readonly value="${esc(p.allowed)}"></div>
+          <div class="field"><label>Keepalive</label><input readonly value="${p.keepalive?esc(p.keepalive)+' с':'выключен'}"></div>
+        </div></div>`).join('')}
+      ${(t.peers||[]).length?'':'<p class="hint" style="margin:-8px 4px 22px">Пиров нет. Без пира туннель никуда не подключится — добавьте его через «Изменить».</p>'}
+      <div class="section"><h2>Конфигурация</h2>
+        <pre class="conf" id="conf">${confHtml(t)}</pre>
+        <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="small" id="cp-conf">Копировать конфиг</button></div>
+      </div>
+    </main>`;
+  $('#back').onclick = () => go({name:'list'});
+  $('#edit').onclick = () => go({name:'edit', id:t.id});
+  bindAdv();
+  $('#dsw').onchange = e => setTunnelOn(t.id, e.target.checked);
+  $('#cp-pub').onclick = () => copy(pub, $('#d-pub'));
+  $('#cp-conf').onclick = () => copy(confText(t), $('#conf'));
+}
+
+function copy(text, el){
+  if(NATIVE){ NATIVE.copy(text); toast('Скопировано'); return; }
+  navigator.clipboard.writeText(text).then(()=>toast('Скопировано')).catch(()=>{
+    if(el.select){ el.focus(); el.select(); }
+    else { const r=document.createRange(); r.selectNodeContents(el); const s=getSelection(); s.removeAllRanges(); s.addRange(r); }
+    toast('Выделено — скопируйте вручную');
+  });
+}
+
+let advOpen = {};
+try{ advOpen = JSON.parse(localStorage.getItem('tunnels.adv')) || {}; }catch(e){}
+function advSummary(t){
+  const parts = [];
+  if((t.mtu||'').trim()) parts.push('MTU ' + t.mtu.trim());
+  if((t.dns||'').trim()) parts.push('DNS ' + t.dns.trim());
+  return parts.join(' · ');
+}
+// key: 'd' — карточка туннеля, 'e' — редактор. Пустой раздел свёрнут, пока его не откроют.
+function advBlock(key, summary, inner){
+  const open = advOpen[key] ?? !!summary;
+  return `<div class="adv${open?' open':''}" data-adv="${key}">
+    <button type="button" class="subhead" aria-expanded="${open}" aria-controls="adv-${key}">
+      <span>Дополнительно</span><span class="cnt">${esc(summary || 'MTU, DNS')}</span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="body" id="adv-${key}" ${open?'':'hidden'}>${inner}</div>
+  </div>`;
+}
+function setAdv(box, open){
+  box.classList.toggle('open', open);
+  box.querySelector('.subhead').setAttribute('aria-expanded', open);
+  box.querySelector('.body').hidden = !open;
+}
+function bindAdv(){
+  app.querySelectorAll('[data-adv]').forEach(box => {
+    box.querySelector('.subhead').onclick = () => {
+      const open = !box.classList.contains('open');
+      setAdv(box, open);
+      advOpen[box.dataset.adv] = open;
+      try{ localStorage.setItem('tunnels.adv', JSON.stringify(advOpen)); }catch(e){}
+    };
+  });
+}
+
+function renderEdit(){
+  const existing = view.id ? tunnels.find(x=>x.id===view.id) : null;
+  const d = view.draft || (existing ? {...existing, peers:(existing.peers||[]).map(p=>({...p}))} : {name:'', priv:genPrivate(), address:'', port:'', mtu:'', dns:'', peers:[newPeer()]});
+  if(!Array.isArray(d.peers)) d.peers = [];
+  if(d.mtu==null) d.mtu = '';
+  view.draft = d;
+  app.innerHTML = `
+    <header>
+      <button class="iconbtn" id="back" aria-label="Отмена">${ICON.back}</button>
+      <h1>${existing?'Изменить туннель':'Новый туннель'}</h1>
+      <button class="textbtn" id="save">Сохранить</button>
+    </header>
+    <main>
+      <form id="f" novalidate>
+      <div class="section"><h2>Интерфейс</h2>
+        <div class="card">
+          <div class="field"><label for="f-name">Название</label>
+            <input class="text" id="f-name" value="${esc(d.name)}" placeholder="например, home" autocomplete="off" maxlength="15">
+            <span class="err" id="e-name" hidden>До 15 символов: латиница, цифры, _ = + . -</span></div>
+          <div class="field"><label for="f-priv">Приватный ключ</label>
+            <div class="inline"><input id="f-priv" value="${esc(d.priv)}" spellcheck="false" autocomplete="off"><button type="button" class="small" id="gen">Сгенерировать</button></div>
+            <span class="err" id="e-priv" hidden>Нужен ключ в Base64 длиной 32 байта (44 символа)</span></div>
+          <div class="field"><label for="f-pub">Публичный ключ</label>
+            <div class="inline"><input id="f-pub" readonly value="${esc(pubFromPriv(d.priv)||'')}"><button type="button" class="small" id="cp">Копировать</button></div></div>
+          <div class="field"><label for="f-addr">Адреса</label>
+            <input id="f-addr" value="${esc(d.address)}" placeholder="10.0.0.2/32" spellcheck="false">
+            <span class="err" id="e-addr" hidden>Укажите адрес с маской, например 10.0.0.2/32. Несколько — через запятую</span></div>
+          <div class="field"><label for="f-port">Порт</label>
+            <input id="f-port" value="${esc(d.port)}" placeholder="автоматически" inputmode="numeric">
+            <span class="err" id="e-port" hidden>Порт — число от 1 до 65535</span></div>
+          ${advBlock('e', advSummary(d), `
+          <div class="field sub"><label for="f-mtu">MTU <span class="opt">необязательно</span></label>
+            <input id="f-mtu" value="${esc(d.mtu)}" placeholder="автоматически" inputmode="numeric">
+            <span class="err" id="e-mtu" hidden>MTU — число от 576 до 9000. Обычно 1420 или 1280</span></div>
+          <div class="field sub"><label for="f-dns">DNS-серверы</label>
+            <input id="f-dns" value="${esc(d.dns)}" placeholder="1.1.1.1, 8.8.8.8" spellcheck="false">
+            <span class="err" id="e-dns" hidden>Перечислите IP-адреса через запятую</span></div>`)}
+        </div></div>
+      ${d.peers.map((p,i)=>`
+      <div class="section peer" data-i="${i}">
+        <div class="sechead"><h2>Пир${d.peers.length>1?' '+(i+1):''}</h2><button type="button" class="linkbtn" data-act="rm">Удалить пир</button></div>
+        <div class="card">
+          <div class="field"><label for="p${i}-pub">Публичный ключ</label>
+            <div class="inline"><input id="p${i}-pub" data-k="pub" value="${esc(p.pub)}" placeholder="ключ сервера, Base64" spellcheck="false" autocomplete="off"><button type="button" class="small" data-act="conf" aria-expanded="false">Из .conf</button></div>
+            <div class="confpaste" hidden>
+              <textarea id="p${i}-conf" data-paste spellcheck="false" placeholder="[Peer]
+PublicKey = …
+Endpoint = vpn.example.org:51820"></textarea>
+              <span class="pastenote" data-note>Вставьте текст файла .conf целиком или только раздел [Peer]. Ключ сервера подставится автоматически.</span>
+            </div>
+            <span class="err" data-e="pub" hidden>Нужен публичный ключ сервера: 44 символа Base64</span></div>
+          <div class="field"><label for="p${i}-psk">Общий ключ <span class="opt">необязательно</span></label>
+            <div class="inline"><input id="p${i}-psk" data-k="psk" value="${esc(p.psk)}" placeholder="нет" spellcheck="false" autocomplete="off"><button type="button" class="small" data-act="psk">Сгенерировать</button></div>
+            <span class="err" data-e="psk" hidden>Общий ключ тоже 44 символа Base64. Оставьте пустым, если не используется</span></div>
+          <div class="field"><label for="p${i}-endpoint">Endpoint</label>
+            <input id="p${i}-endpoint" data-k="endpoint" value="${esc(p.endpoint)}" placeholder="vpn.example.org:51820" spellcheck="false">
+            <span class="err" data-e="endpoint" hidden>Формат: хост:порт, например 203.0.113.10:51820</span></div>
+          <div class="field"><label for="p${i}-allowed">Разрешённые IP</label>
+            <input id="p${i}-allowed" data-k="allowed" value="${esc(p.allowed)}" placeholder="0.0.0.0/0, ::/0" spellcheck="false">
+            <span class="err" data-e="allowed" hidden>Подсети с маской через запятую. 0.0.0.0/0, ::/0 — весь трафик через VPN</span></div>
+          <div class="field"><label for="p${i}-keepalive">Keepalive, секунд <span class="opt">необязательно</span></label>
+            <input id="p${i}-keepalive" data-k="keepalive" value="${esc(p.keepalive)}" placeholder="выключен" inputmode="numeric">
+            <span class="err" data-e="keepalive" hidden>Число от 1 до 65535. Обычно 25</span></div>
+        </div></div>`).join('')}
+      <button type="button" class="addpeer" id="addpeer">${ICON.new} Добавить пир</button>
+      ${existing?'<button type="button" class="danger" id="del">Удалить туннель</button>':''}
+      </form>
+    </main>`;
+
+  const bind = (id,key)=> $(id).addEventListener('input', e=>{ d[key]=e.target.value; if(key==='priv') $('#f-pub').value = pubFromPriv(d.priv)||''; });
+  bind('#f-name','name'); bind('#f-priv','priv'); bind('#f-addr','address'); bind('#f-port','port'); bind('#f-dns','dns'); bind('#f-mtu','mtu');
+  bindAdv();
+  $('#gen').onclick = () => { d.priv = genPrivate(); $('#f-priv').value = d.priv; $('#f-pub').value = pubFromPriv(d.priv); };
+  $('#cp').onclick = () => copy($('#f-pub').value, $('#f-pub'));
+  app.querySelectorAll('.peer').forEach(sec=>{
+    const p = d.peers[+sec.dataset.i];
+    sec.querySelectorAll('input[data-k]').forEach(inp=> inp.addEventListener('input', ()=> p[inp.dataset.k] = inp.value));
+    const pubInp = sec.querySelector('[data-k="pub"]'), box = sec.querySelector('.confpaste'),
+          ta = sec.querySelector('[data-paste]'), note = sec.querySelector('[data-note]'), confBtn = sec.querySelector('[data-act="conf"]');
+    const fillFrom = txt => {
+      const r = peerFromConf(txt);
+      if(!r){ return false; }
+      p.pub = r.pub; pubInp.value = r.pub; pubInp.classList.remove('bad'); sec.querySelector('[data-e="pub"]').hidden = true;
+      // остальные поля пира заполняем, только если они пустые или стоят по умолчанию
+      const filled = ['Публичный ключ'];
+      const put = (k, v, label) => {
+        if(!v) return;
+        const cur = (p[k]||'').trim();
+        if(cur && !(k==='allowed' && cur===newPeer().allowed)) return;
+        p[k] = v; sec.querySelector(`[data-k="${k}"]`).value = v; filled.push(label);
+      };
+      put('psk', r.psk, 'общий ключ'); put('endpoint', r.endpoint, 'Endpoint');
+      put('allowed', r.allowed, 'разрешённые IP'); put('keepalive', r.keepalive, 'Keepalive');
+      toast(filled.length>1 ? 'Подставлено: ' + filled.join(', ') : 'Ключ сервера подставлен');
+      return true;
+    };
+    confBtn.onclick = () => {
+      box.hidden = !box.hidden; confBtn.setAttribute('aria-expanded', !box.hidden);
+      if(!box.hidden) ta.focus();
+    };
+    ta.addEventListener('input', () => {
+      if(!ta.value.trim()){ note.className='pastenote'; note.textContent='Вставьте текст файла .conf целиком или только раздел [Peer]. Ключ сервера подставится автоматически.'; return; }
+      if(fillFrom(ta.value)){ box.hidden = true; confBtn.setAttribute('aria-expanded','false'); ta.value=''; pubInp.focus(); }
+      else { note.className='pastenote bad'; note.textContent='Не нашёл ключ сервера. Проверьте, что в тексте есть раздел [Peer] со строкой PublicKey = …'; }
+    });
+    // вставка текста .conf прямо в поле ключа
+    pubInp.addEventListener('paste', e => {
+      const txt = (e.clipboardData||window.clipboardData)?.getData('text') || '';
+      if(/\n|=\s*\S|\[Peer\]/i.test(txt.trim().replace(/=+$/,'')) && fillFrom(txt)) e.preventDefault();
+    });
+    sec.querySelector('[data-act="psk"]').onclick = () => { p.psk = b64e(nacl.randomBytes(32)); sec.querySelector('[data-k="psk"]').value = p.psk; };
+    sec.querySelector('[data-act="rm"]').onclick = () => { d.peers.splice(+sec.dataset.i,1); renderEdit(); };
+  });
+  $('#addpeer').onclick = () => { d.peers.push(newPeer()); renderEdit(); app.querySelector(`#p${d.peers.length-1}-pub`)?.focus(); };
+  $('#back').onclick = () => { const back = existing ? {name:'detail', id:existing.id} : {name:'list'}; go(back); };
+  $('#f').onsubmit = e => { e.preventDefault(); doSave(); };
+  $('#save').onclick = doSave;
+
+  if(existing){
+    const del = $('#del');
+    del.onclick = () => {
+      if(!del.classList.contains('confirm')){ del.classList.add('confirm'); del.textContent='Нажмите ещё раз, чтобы удалить'; return; }
+      if(NATIVE && existing.on) NATIVE.setTunnel(existing.name, false, '');
+      tunnels = tunnels.filter(x=>x.id!==existing.id); save(); go({name:'list'}); toast('Туннель удалён');
+    };
+  }
+
+  function doSave(){
+    const checks = [
+      ['name', isName(d.name.trim()) && !tunnels.some(x=>x.name===d.name.trim() && x.id!==existing?.id)],
+      ['priv', !!pubFromPriv(d.priv)],
+      ['addr', isCidrList(d.address)],
+      ['port', d.port.trim()==='' || (/^\d+$/.test(d.port.trim()) && +d.port>0 && +d.port<65536)],
+      ['mtu', d.mtu.trim()==='' || (/^\d+$/.test(d.mtu.trim()) && +d.mtu>=576 && +d.mtu<=9000)],
+      ['dns', d.dns.trim()==='' || isIpList(d.dns)],
+    ];
+    let ok = true;
+    const advBox = app.querySelector('[data-adv="e"]');
+    if(checks.some(([k,v])=>!v && (k==='mtu'||k==='dns')) && advBox) setAdv(advBox, true);
+    for(const [k,v] of checks){
+      $('#e-'+k).hidden = v; $('#f-'+(k==='addr'?'addr':k)).classList.toggle('bad', !v);
+      if(!v && ok){ $('#f-'+k).focus(); ok=false; }
+    }
+    $('#e-name').textContent = isName(d.name.trim()) ? 'Туннель с таким названием уже есть' : 'До 15 символов: латиница, цифры, _ = + . -';
+    app.querySelectorAll('.peer').forEach(sec=>{
+      const p = d.peers[+sec.dataset.i];
+      const ka = p.keepalive.trim();
+      const pc = {
+        pub: isKey(p.pub) && p.pub.trim()!==pubFromPriv(d.priv),
+        psk: p.psk.trim()==='' || isKey(p.psk),
+        endpoint: p.endpoint.trim()==='' || isEndpoint(p.endpoint),
+        allowed: isCidrList(p.allowed),
+        keepalive: ka==='' || (/^\d+$/.test(ka) && +ka>0 && +ka<65536),
+      };
+      for(const k in pc){
+        sec.querySelector(`[data-e="${k}"]`).hidden = pc[k];
+        const inp = sec.querySelector(`[data-k="${k}"]`); inp.classList.toggle('bad', !pc[k]);
+        if(!pc[k] && ok){ inp.focus(); ok=false; }
+      }
+      sec.querySelector('[data-e="pub"]').textContent = isKey(p.pub)
+        ? 'Здесь нужен ключ сервера, а не публичный ключ этого туннеля'
+        : 'Нужен публичный ключ сервера: 44 символа Base64';
+    });
+    if(!ok) return;
+    const clean = {name:d.name.trim(), priv:d.priv.trim(), address:d.address.trim(), port:d.port.trim(), mtu:d.mtu.trim(), dns:d.dns.trim(),
+      peers:d.peers.map(p=>({pub:p.pub.trim(), psk:p.psk.trim(), endpoint:p.endpoint.trim(), allowed:p.allowed.trim(), keepalive:p.keepalive.trim()}))};
+    if(existing){ const oldName = existing.name; Object.assign(existing, clean); delete existing.example; save(); go({name:'detail', id:existing.id}); if(existing.on) reapplyRunning(oldName); }
+    else { const t = {id:uid(), on:false, ...clean}; tunnels.push(t); save(); go({name:'list'}); }
+    toast('Сохранено');
+  }
+}
+
+const FAQ = [
+  {group:'Общее', items:[
+    {q:'Что такое туннель?', ex:null, a:`Туннель — это одно сохранённое VPN-подключение. Он состоит из двух частей: <b>интерфейса</b> (настройки вашего устройства) и одного или нескольких <b>пиров</b> (серверов, к которым вы подключаетесь). Весь трафик между вами и пиром шифруется.`},
+    {q:'Весь трафик или одно приложение?', ex:'IncludedApplications = org.telegram.messenger', a:`Бегунок внизу главного экрана, рядом с «+». Слева — <b>VPN для всего устройства</b>: через туннель идёт трафик всех приложений. Справа — <b>для одного приложения</b>: вы выбираете приложение, и через VPN идёт только его трафик, а остальные работают напрямую. Выбор записывается в конфиг строкой <code>IncludedApplications</code>. Её понимает официальное приложение WireGuard для Android; на компьютерах и iPhone эта строка не поддерживается.`},
+    {q:'Откуда брать данные для полей?', ex:null, a:`Обычно их выдаёт администратор VPN-сервера или сервис, у которого вы купили VPN, — чаще всего готовым файлом <code>.conf</code>. В этом случае удобнее нажать «+» → «Импорт из текста .conf» и вставить содержимое файла: все поля заполнятся сами.`},
+  ]},
+  {group:'Интерфейс — ваше устройство', items:[
+    {q:'Название', ex:'home', a:`Имя туннеля, чтобы отличать его в списке. Ни на что не влияет, кроме удобства. Допустимы латиница, цифры и символы <code>_ = + . -</code>, до 15 знаков — это ограничение самого WireGuard на имя сетевого интерфейса.`},
+    {q:'Приватный ключ', ex:'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=', a:`Секретный ключ вашего устройства. Им расшифровываются входящие пакеты и подтверждается, что это именно вы. <b>Никому его не передавайте</b>, в том числе администратору сервера. Нажмите «Сгенерировать», чтобы создать новый, или вставьте ключ, выданный вам вместе с конфигом.`},
+    {q:'Публичный ключ', ex:'xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=', a:`Вычисляется из приватного ключа автоматически, поэтому поле только для чтения. Этот ключ можно и нужно отдавать: администратор добавит его на сервер, чтобы сервер узнавал ваше устройство. Скопируйте его кнопкой «Копировать».`},
+    {q:'Адреса', ex:'10.8.0.2/32', a:`Внутренний IP-адрес вашего устройства <b>внутри</b> VPN-сети. Он существует только в туннеле и не совпадает с вашим обычным адресом в интернете. Число после косой черты — маска: <code>/32</code> означает один адрес. Адрес выдаёт администратор сервера; у каждого клиента он свой. Несколько адресов (например, IPv4 и IPv6) пишутся через запятую.`},
+    {q:'Порт', ex:'51820', a:`UDP-порт, на котором ваше устройство принимает пакеты. На клиенте его почти всегда оставляют пустым — тогда порт выбирается автоматически. Указывать имеет смысл, если устройство само работает как сервер и к нему подключаются другие.`},
+    {q:'MTU', ex:'1420', a:`Раздел «Дополнительно». Максимальный размер одного пакета в байтах. Обычно поле оставляют пустым — значение подберётся автоматически. Если сайты открываются частично, «зависают» на загрузке или не работают видеозвонки, попробуйте уменьшить MTU до <code>1380</code> или <code>1280</code>: это часто помогает в мобильных сетях и за некоторыми роутерами.`},
+    {q:'DNS-серверы', ex:'1.1.1.1, 1.0.0.1', a:`Раздел «Дополнительно». Серверы, которые превращают имена сайтов (<code>example.org</code>) в IP-адреса, пока туннель включён. Если оставить пустым, запросы могут идти мимо VPN через DNS вашего провайдера. Часто здесь указывают DNS внутри VPN-сети, например <code>10.8.0.1</code>.`},
+  ]},
+  {group:'Пир — сервер, к которому вы подключаетесь', items:[
+    {q:'Публичный ключ пира', ex:'HIgo9xNzJMWLKASShiTqIybxZ0U3wGLiUeJ1PKf8ykw=', a:`Публичный ключ <b>сервера</b>. По нему ваше устройство проверяет, что общается с настоящим сервером, а не с подменой. Его даёт администратор. Не вставляйте сюда свой собственный публичный ключ — приложение предупредит об этой ошибке.`},
+    {q:'Общий ключ', ex:'необязательно', a:`PresharedKey — дополнительный секрет, одинаковый у вас и у сервера. Добавляет ещё один слой шифрования поверх основного, в том числе на случай появления квантовых компьютеров. Использовать его стоит, только если он задан и на сервере, иначе подключение не заработает.`},
+    {q:'Endpoint', ex:'vpn.example.org:51820', a:`Адрес сервера в интернете в формате <code>хост:порт</code> — куда ваше устройство отправляет зашифрованные пакеты. Хост может быть IP-адресом или доменом, порт чаще всего <code>51820</code>. Не путайте с полем «Адреса»: Endpoint — внешний адрес сервера, а «Адреса» — ваш внутренний адрес в VPN. На клиенте Endpoint обязателен.`},
+    {q:'Разрешённые IP', ex:'0.0.0.0/0, ::/0', a:`Какой трафик отправлять через этот пир. <code>0.0.0.0/0, ::/0</code> — весь интернет-трафик идёт через VPN. Если указать конкретные подсети, например <code>10.66.0.0/16</code>, через VPN пойдёт только трафик к ним, а остальное — напрямую. Так обычно настраивают доступ к офисной сети.`},
+    {q:'Keepalive', ex:'25', a:`Как часто, в секундах, отправлять пустой служебный пакет, чтобы соединение не «засыпало». Нужен, если вы за роутером или мобильной сетью и сервер иногда не может до вас достучаться. Типичное значение — <code>25</code>. Если всё работает и без него, поле можно оставить пустым.`},
+  ]},
+];
+
+const EXAMPLES = [
+  {name:'home', title:'Домашний VPN: весь трафик через сервер',
+   text:'Типичный вариант для защиты в публичном Wi-Fi или доступа к сайтам через другую страну. Разрешённые IP 0.0.0.0/0, ::/0 отправляют в туннель весь трафик, а Keepalive 25 не даёт соединению «заснуть» за роутером.',
+   iface:[['Приватный ключ','•••••••••••••••• скрыт'],['Публичный ключ','gN65BkIKy1eCE9pP1wdc8ROUtkHLF2PfAqYdyYBz6EA='],['Адреса','10.8.0.2/32'],['Порт','автоматически'],['MTU','1420'],['DNS-серверы','1.1.1.1, 1.0.0.1']],
+   peer:[['Публичный ключ','TrMvSoP4jYQlY6RIzBgbssQqY3vxI2Pi+y71lOWWXX0='],['Общий ключ','не задан'],['Endpoint','vpn.example.org:51820'],['Разрешённые IP','0.0.0.0/0, ::/0'],['Keepalive','25 с']]},
+  {name:'office', title:'Офис: только рабочая сеть',
+   text:'Через VPN идёт только трафик к офисным подсетям, остальной интернет работает напрямую. DNS указан внутренний, чтобы открывались адреса вида intranet.local. Для надёжности задан общий ключ.',
+   iface:[['Приватный ключ','•••••••••••••••• скрыт'],['Публичный ключ','9Xz0ar1Jq7UYz5f8dKN3m2Rw1hO6pTGcE4lVbI+Ws2k='],['Адреса','10.66.0.14/24'],['Порт','автоматически'],['MTU','1280'],['DNS-серверы','10.66.0.1']],
+   peer:[['Публичный ключ','HIgo9xNzJMWLKASShiTqIybxZ0U3wGLiUeJ1PKf8ykw='],['Общий ключ','задан'],['Endpoint','203.0.113.10:51820'],['Разрешённые IP','10.66.0.0/16, 192.168.50.0/24'],['Keepalive','выключен']]},
+];
+
+function exampleSvg(ex){
+  const W=360, P=16, ROW=44;
+  let y=0, out='';
+  // шапка как в карточке туннеля
+  out += `<path class="sv-stroke" d="M${P+8} 22l-6 7 6 7"/>
+    <text class="sv-title" x="${P+26}" y="36">${esc(ex.name)}</text>
+    <text class="sv-action" x="${W-P}" y="35" text-anchor="end">Изменить</text>`;
+  y=58;
+  const block=(label,rows)=>{
+    out += `<text class="sv-sec" x="${P+4}" y="${y+22}">${label}</text>`;
+    y+=32;
+    const h=rows.length*ROW+8;
+    out += `<rect class="sv-card" x="${P}" y="${y}" width="${W-2*P}" height="${h}" rx="12"/>`;
+    rows.forEach(([k,v],i)=>{
+      const ry=y+4+i*ROW;
+      if(i) out += `<line class="sv-line" x1="${P+14}" x2="${W-P-14}" y1="${ry}" y2="${ry}"/>`;
+      out += `<text class="sv-label" x="${P+14}" y="${ry+17}">${esc(k)}</text>
+        <text class="sv-val${v.length>40?' sv-long':''}" x="${P+14}" y="${ry+34}">${esc(v)}</text>`;
+    });
+    y+=h+6;
+  };
+  block('ИНТЕРФЕЙС', ex.iface);
+  block('ПИР', ex.peer);
+  y+=10;
+  return `<svg viewBox="0 0 ${W} ${y}" role="img" aria-label="Пример настроек туннеля ${esc(ex.name)}" xmlns="http://www.w3.org/2000/svg">
+    <rect class="sv-bg" x="0" y="0" width="${W}" height="${y}"/>${out}</svg>`;
+}
+
+function renderFaq(){
+  app.innerHTML = `
+    <header>
+      <button class="iconbtn" id="back" aria-label="Назад">${ICON.back}</button>
+      <h1>FAQ</h1>
+    </header>
+    <main>
+      <p class="lead">Что означает каждое поле при создании туннеля. Нажмите на вопрос, чтобы раскрыть ответ.</p>
+      ${FAQ.map((g,gi)=>`
+        <div class="section"><h2>${g.group}</h2>
+          <div class="faq">${g.items.map((it,ii)=>`
+            <details id="faq-${gi}-${ii}">
+              <summary><span>${it.q}</span><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></summary>
+              <div class="ans"><p>${it.a}</p>${it.ex?`<div class="ex"><span>Пример</span><code>${esc(it.ex)}</code></div>`:''}</div>
+            </details>`).join('')}
+          </div></div>`).join('')}
+      <div class="section" id="examples"><h2>Примеры заполненных туннелей</h2>
+        <div class="examples">${EXAMPLES.map(ex=>`
+          <figure class="shot">
+            <button type="button" class="frame" data-ex="${EXAMPLES.indexOf(ex)}" aria-label="Открыть пример ${esc(ex.name)} на весь экран">${exampleSvg(ex)}
+              <span class="zoom" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span></button>
+            <figcaption><b>${esc(ex.title)}</b>${esc(ex.text)}</figcaption>
+          </figure>`).join('')}
+        </div>
+        <p class="hint">Ключи и адреса на картинках вымышленные. Свои данные берите у администратора VPN-сервера.</p>
+      </div>
+      <button type="button" class="addpeer" id="faq-new">${ICON.new} Создать туннель</button>
+    </main>`;
+  $('#back').onclick = () => go({name:'list'});
+  $('#faq-new').onclick = () => go({name:'edit', id:null});
+  app.querySelectorAll('.frame').forEach(f=> f.onclick = () => openLightbox(+f.dataset.ex, f));
+}
+
+let lbReturn = null;
+function openLightbox(i, from){
+  const ex = EXAMPLES[i]; lbReturn = from;
+  const lb = $('#lightbox');
+  lb.innerHTML = `
+    <div class="lb-top">
+      <div class="lb-cap"><b>${esc(ex.name)}</b><span>${esc(ex.title)}</span></div>
+      <button type="button" class="lb-close" id="lb-close" aria-label="Закрыть">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="lb-body">${exampleSvg(ex)}</div>`;
+  lb.hidden = false;
+  document.documentElement.style.overflow = 'hidden';
+  $('#lb-close').focus();
+  $('#lb-close').onclick = closeLightbox;
+  lb.querySelector('.lb-body').onclick = e => { if(e.target.closest('svg') === null) closeLightbox(); };
+}
+function closeLightbox(){
+  const lb = $('#lightbox'); if(lb.hidden) return;
+  lb.hidden = true; lb.innerHTML = '';
+  document.documentElement.style.overflow = '';
+  lbReturn?.focus();
+}
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeLightbox(); });
+
+function renderAddrPort(){
+  app.innerHTML = `
+    <header>
+      <button class="iconbtn" id="back" aria-label="Назад">${ICON.back}</button>
+      <h1>Адрес и порт</h1>
+    </header>
+    <main>
+      <div class="card ap">
+        <p>Адрес можно взять из диапазона <code>10.0.0.0/8</code>, например <code>10.8.0.2/32</code></p>
+        <p>Порт можно написать такой: <code>51820</code></p>
+      </div>
+    </main>`;
+  $('#back').onclick = () => go({name:'list'});
+}
+
+function renderImport(){
+  app.innerHTML = `
+    <header>
+      <button class="iconbtn" id="back" aria-label="Отмена">${ICON.back}</button>
+      <h1>Импорт</h1>
+      <button class="textbtn" id="go">Далее</button>
+    </header>
+    <main>
+      <div class="section"><h2>Текст конфигурации</h2>
+        <textarea class="import" id="f-imp" spellcheck="false" placeholder="[Interface]
+PrivateKey = …
+Address = 10.0.0.2/32
+DNS = 1.1.1.1"></textarea>
+        <p class="hint">Вставьте содержимое файла .conf. Поля интерфейса подставятся в форму нового туннеля.</p>
+      </div>
+    </main>`;
+  $('#back').onclick = () => go({name:'list'});
+  $('#go').onclick = () => {
+    const all = $('#f-imp').value;
+    const blocks = all.split(/^\s*\[Peer\]\s*$/mi);
+    const getIn = (txt,k) => (txt.match(new RegExp('^\\s*'+k+'\\s*=\\s*(.+)$','mi'))||[])[1]?.trim()||'';
+    const iface = blocks[0];
+    if(!getIn(iface,'PrivateKey')){ toast('В тексте нет строки PrivateKey'); return; }
+    const peers = blocks.slice(1).map(b=>({pub:getIn(b,'PublicKey'), psk:getIn(b,'PresharedKey'), endpoint:getIn(b,'Endpoint'),
+      allowed:getIn(b,'AllowedIPs'), keepalive:getIn(b,'PersistentKeepalive')}));
+    view = {name:'edit', id:null, draft:{name:'', priv:getIn(iface,'PrivateKey'), address:getIn(iface,'Address'), port:getIn(iface,'ListenPort'), mtu:getIn(iface,'MTU'), dns:getIn(iface,'DNS'), peers}};
+    render();
+  };
+}
+
+syncRunning();
+render();
+</script>
+
+</body>
+</html>
