@@ -28,10 +28,20 @@ jobs:
 
       - name: Подготовить ключ подписи
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          # Берём значение из Secrets, а если его там нет — из Variables
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || vars.KEYSTORE_BASE64 }}
+          KS_SECRET_SET: ${{ secrets.KEYSTORE_BASE64 != '' }}
+          KS_VAR_SET: ${{ vars.KEYSTORE_BASE64 != '' }}
+          PW_SET: ${{ (secrets.KEYSTORE_PASSWORD || vars.KEYSTORE_PASSWORD) != '' }}
+          ALIAS_SET: ${{ (secrets.KEY_ALIAS || vars.KEY_ALIAS) != '' }}
         run: |
+          echo "Проверка (значения не показываются):"
+          echo "  KEYSTORE_BASE64 в Secrets: $KS_SECRET_SET, в Variables: $KS_VAR_SET, длина: ${#KEYSTORE_BASE64}"
+          echo "  KEYSTORE_PASSWORD задан: $PW_SET"
+          echo "  KEY_ALIAS задан: $ALIAS_SET"
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            # убираем пробелы и переносы строк, если они случайно попали при вставке
+            echo "$KEYSTORE_BASE64" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/release.jks" || { echo "::error::KEYSTORE_BASE64 вставлен не полностью или с лишними символами"; exit 1; }
             echo "LOCALVPN_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
             echo "Ключ подписи найден"
           else
@@ -40,8 +50,8 @@ jobs:
 
       - name: Собрать APK
         env:
-          LOCALVPN_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          LOCALVPN_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          LOCALVPN_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || vars.KEYSTORE_PASSWORD }}
+          LOCALVPN_KEY_ALIAS: ${{ secrets.KEY_ALIAS || vars.KEY_ALIAS }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Переименовать файл
