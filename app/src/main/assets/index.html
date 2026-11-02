@@ -153,7 +153,27 @@ main{flex:1;padding-block:4px 120px;padding-left:max(16px,env(safe-area-inset-le
 .small:hover{background:var(--field)}
 .danger{width:100%;border:1px solid var(--line);background:var(--surface);color:var(--danger);font:700 15px var(--display);padding:14px;border-radius:14px;cursor:pointer}
 .danger:hover{background:var(--field)}
-.topmenu{position:absolute;top:calc(100% - 6px);right:max(16px,env(safe-area-inset-right,0px));z-index:8;
+.hero{position:relative;top:auto;justify-content:center;padding-block:28px 8px}
+.hero #more{position:absolute;top:14px;right:max(12px,env(safe-area-inset-right,0px))}
+.power{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;min-width:0}
+.power-btn{width:104px;height:104px;border-radius:50%;cursor:pointer;display:grid;place-items:center;
+  background:var(--surface);color:var(--muted);border:2px solid var(--line);
+  box-shadow:0 10px 26px rgba(0,0,0,.08);transition:background .2s,color .2s,border-color .2s,box-shadow .2s,transform .12s;margin-bottom:8px}
+.power-btn:hover{color:var(--fg);transform:translateY(-1px)}
+.power-btn:active{transform:scale(.96)}
+.power-btn:disabled{cursor:progress}
+.power.on .power-btn{background:var(--on);border-color:var(--on);color:#fff;
+  box-shadow:0 0 0 8px color-mix(in srgb,var(--on) 18%,transparent),0 12px 30px color-mix(in srgb,var(--on) 35%,transparent)}
+.power.busy .power-btn{border-color:var(--on);color:var(--on);animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--on) 35%,transparent)}50%{box-shadow:0 0 0 12px color-mix(in srgb,var(--on) 0%,transparent)}}
+.power-label{font-size:19px;font-weight:800;letter-spacing:-.01em}
+.power.on .power-label{color:var(--on)}
+.power-sub{font-size:13.5px;color:var(--muted);max-width:30ch;overflow-wrap:anywhere}
+main.home{display:flex;flex-direction:column;justify-content:center;gap:14px;padding-top:12px}
+.home-title{margin:0;text-align:center;font-size:24px;font-weight:800;letter-spacing:-.01em}
+main.home .empty{padding:24px 20px 40px}
+@media (prefers-reduced-motion: reduce){.power.busy .power-btn{animation:none}}
+.topmenu{position:absolute;top:58px;right:max(16px,env(safe-area-inset-right,0px));z-index:8;
   background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.18);overflow:hidden;min-width:240px}
 .topmenu button{display:flex;gap:12px;align-items:center;width:100%;border:0;background:transparent;color:var(--fg);font:600 14.5px var(--display);padding:14px 16px;cursor:pointer;text-align:left}
 .topmenu button:hover{background:var(--field)}
@@ -351,8 +371,15 @@ function srcApps(){
 }
 const findApp = p => srcApps().find(a => a.p === p);
 // Включает/выключает туннель. В браузере — только отметка, в приложении — настоящее подключение.
+let lastTunnelId = null;
+try{ lastTunnelId = localStorage.getItem('tunnels.last'); }catch(e){}
+// Какой туннель включает большая кнопка: работающий, иначе последний включённый, иначе первый
+function powerTarget(){
+  return tunnels.find(x => x.on) || tunnels.find(x => x.id === lastTunnelId) || tunnels[0] || null;
+}
 function setTunnelOn(id, on){
   const t = tunnels.find(x => x.id === id); if(!t) return;
+  if(on){ lastTunnelId = id; try{ localStorage.setItem('tunnels.last', id); }catch(e){} }
   if(!NATIVE){
     tunnels.forEach(x => x.on = x.id === id ? on : false);
     save(); render(); toast(on ? 'Туннель включён' : 'Туннель выключен');
@@ -447,16 +474,36 @@ function render(){
   else if(view.name==='addrport') renderAddrPort();
 }
 
+function powerHtml(){
+  const t = powerTarget();
+  const on = !!t?.on, busy = !!t?.pending;
+  const state = busy ? 'busy' : on ? 'on' : 'off';
+  const label = !t ? 'Нет туннелей' : busy ? 'Подключение…' : on ? 'VPN включён' : 'VPN выключен';
+  const sub = !t ? 'Создайте туннель кнопкой «+»'
+    : on ? `Туннель ${esc(t.name)}${route.mode==='app' ? ' · только ' + esc(route.app.n) : ''}`
+    : busy ? esc(t.name) : `Нажмите, чтобы включить ${esc(t.name)}`;
+  return `<div class="power ${state}">
+      <button type="button" class="power-btn" id="power" ${busy?'disabled':''} aria-pressed="${on}"
+        aria-label="${on ? 'Выключить VPN' : 'Включить VPN'}">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.4 6.6a8 8 0 1 0 11.2 0"/></svg>
+      </button>
+      <div class="power-label">${label}</div>
+      <div class="power-sub">${sub}</div>
+    </div>`;
+}
+
 function renderList(){
   app.innerHTML = `
-    <header><h1>Туннели</h1>
+    <header class="hero">
+      ${powerHtml()}
       <button class="iconbtn" id="more" aria-label="Ещё" aria-haspopup="true" aria-expanded="false">${ICON.more}</button>
       <div class="topmenu" id="topmenu" hidden>
         <button id="m-faq">${ICON.help} FAQ: как создать туннель</button>
         <button id="m-ap">${ICON.pin} Адрес и порт</button>
       </div>
     </header>
-    <main>
+    <main class="home">
+      <h1 class="home-title">Туннели</h1>
       ${tunnels.length ? `<div class="list">${tunnels.map(t=>`
         <div class="row ${t.on?'on':''}" data-id="${t.id}" tabindex="0">
           <span class="dot"></span>
@@ -488,6 +535,12 @@ function renderList(){
     r.addEventListener('keydown', e=>{ if(e.key==='Enter') go({name:'detail', id}); });
     r.querySelector('input').addEventListener('change', e=> setTunnelOn(id, e.target.checked)); // одновременно активен только один
   });
+  $('#power').onclick = e => {
+    e.stopPropagation();
+    const t = powerTarget();
+    if(!t){ toast('Сначала создайте туннель кнопкой «+»'); $('#menu').hidden = false; return; }
+    setTunnelOn(t.id, !t.on);
+  };
   const menu = $('#menu'), top = $('#topmenu'), more = $('#more');
   $('#fab').onclick = e => { e.stopPropagation(); top.hidden = true; menu.hidden = !menu.hidden; };
   more.onclick = e => { e.stopPropagation(); menu.hidden = true; top.hidden = !top.hidden; more.setAttribute('aria-expanded', !top.hidden); };
