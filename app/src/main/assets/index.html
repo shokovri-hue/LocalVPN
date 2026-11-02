@@ -23,7 +23,7 @@ img{max-width:100%}
 :root{
   --bg:#eef1f3; --surface:#ffffff; --fg:#17202a; --muted:#5f6b78; --line:#d9dfe5;
   --accent:#b8322c; --accent-ink:#ffffff; --on:#1f8a5b; --field:#f5f7f9; --danger:#b8322c;
-  --display:"Manrope",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --brand:#b8322c; --display:"Manrope",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#12161b; --surface:#1b2128; --fg:#e7ecf1; --muted:#95a1ae; --line:#2c343e;
@@ -153,19 +153,22 @@ main{flex:1;padding-block:4px 120px;padding-left:max(16px,env(safe-area-inset-le
 .small:hover{background:var(--field)}
 .danger{width:100%;border:1px solid var(--line);background:var(--surface);color:var(--danger);font:700 15px var(--display);padding:14px;border-radius:14px;cursor:pointer}
 .danger:hover{background:var(--field)}
-.hero{position:relative;top:auto;justify-content:center;padding-block:28px 8px}
+.hero{position:relative;top:auto;justify-content:center;padding-block:32px 8px}
 .hero #more{position:absolute;top:14px;right:max(12px,env(safe-area-inset-right,0px))}
 .power{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;min-width:0}
-.power-btn{width:104px;height:104px;border-radius:50%;cursor:pointer;display:grid;place-items:center;
-  background:var(--surface);color:var(--muted);border:2px solid var(--line);
-  box-shadow:0 10px 26px rgba(0,0,0,.08);transition:background .2s,color .2s,border-color .2s,box-shadow .2s,transform .12s;margin-bottom:8px}
-.power-btn:hover{color:var(--fg);transform:translateY(-1px)}
+.power-btn{width:148px;height:148px;border-radius:50%;cursor:pointer;display:grid;place-items:center;border:0;
+  background:var(--brand);box-shadow:0 14px 34px color-mix(in srgb,var(--brand) 38%,transparent);
+  transition:background .25s,box-shadow .25s,transform .12s;margin-bottom:10px}
+.power-ico .shield{fill:#fff}
+.power-ico .check{stroke:var(--brand);transition:stroke .25s}
+.power-btn:hover{transform:translateY(-2px)}
 .power-btn:active{transform:scale(.96)}
 .power-btn:disabled{cursor:progress}
-.power.on .power-btn{background:var(--on);border-color:var(--on);color:#fff;
-  box-shadow:0 0 0 8px color-mix(in srgb,var(--on) 18%,transparent),0 12px 30px color-mix(in srgb,var(--on) 35%,transparent)}
-.power.busy .power-btn{border-color:var(--on);color:var(--on);animation:pulse 1.2s ease-in-out infinite}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--on) 35%,transparent)}50%{box-shadow:0 0 0 12px color-mix(in srgb,var(--on) 0%,transparent)}}
+.power.on .power-btn{background:var(--on);
+  box-shadow:0 0 0 10px color-mix(in srgb,var(--on) 18%,transparent),0 14px 34px color-mix(in srgb,var(--on) 38%,transparent)}
+.power.on .power-ico .check{stroke:var(--on)}
+.power.busy .power-btn{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--brand) 45%,transparent)}50%{box-shadow:0 0 0 16px color-mix(in srgb,var(--brand) 0%,transparent)}}
 .power-label{font-size:19px;font-weight:800;letter-spacing:-.01em}
 .power.on .power-label{color:var(--on)}
 .power-sub{font-size:13.5px;color:var(--muted);max-width:30ch;overflow-wrap:anywhere}
@@ -485,7 +488,10 @@ function powerHtml(){
   return `<div class="power ${state}">
       <button type="button" class="power-btn" id="power" ${busy?'disabled':''} aria-pressed="${on}"
         aria-label="${on ? 'Выключить VPN' : 'Включить VPN'}">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.4 6.6a8 8 0 1 0 11.2 0"/></svg>
+        <svg class="power-ico" width="100" height="100" viewBox="0 0 24 24" aria-hidden="true">
+          <path class="shield" d="M12 2.5L20.5 5.7V12C20.5 16.9 16.9 21 12 21.8C7.1 21 3.5 16.9 3.5 12V5.7Z"/>
+          <path class="check" d="M8.5 12.2L11 14.7L15.8 9.6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </button>
       <div class="power-label">${label}</div>
       <div class="power-sub">${sub}</div>
