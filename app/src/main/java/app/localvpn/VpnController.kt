@@ -143,7 +143,13 @@ object VpnController {
             }
             "Ошибка в настройках: $field — $what. Откройте туннель и нажмите «Изменить»"
         }
-        is IllegalStateException -> e.message ?: "Не удалось включить туннель"
+        is IllegalStateException, is IllegalArgumentException -> when {
+            e.message?.contains("Cannot set address", true) == true ->
+                "Android не принял адреса туннеля. Если MTU меньше 1280, уберите из «Адресов» IPv6-адрес (с двоеточиями) или верните MTU 1280"
+            e.message?.contains("Bad address", true) == true || e.message?.contains("Bad route", true) == true ->
+                "Android не принял адрес или маршрут. Проверьте поля «Адреса» и «Разрешённые IP»"
+            else -> e.message ?: "Не удалось включить туннель"
+        }
         is UnsatisfiedLinkError -> "Движок VPN не загрузился на этом телефоне. Напишите разработчику модель телефона"
         else -> "Не удалось включить туннель: ${e.message ?: e.javaClass.simpleName}"
     }

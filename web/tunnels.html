@@ -887,7 +887,8 @@ function renderEdit(){
           ${advBlock('e', advSummary(d), `
           <div class="field sub"><label for="f-mtu">MTU <span class="opt">необязательно</span></label>
             <input id="f-mtu" value="${esc(d.mtu)}" placeholder="автоматически" inputmode="numeric">
-            <span class="err" id="e-mtu" hidden>MTU — число от 576 до 9000. Обычно 1420 или 1280</span></div>
+            <span class="err" id="e-mtu" hidden>MTU — число от 576 до 9000. Обычно 1420 или 1280</span>
+            <span class="err" id="e-mtu6" hidden>При MTU меньше 1280 Android не разрешает IPv6. Уберите из «Адресов» адрес с двоеточиями (…/128) или поставьте MTU 1280</span></div>
           <div class="field sub"><label for="f-dns">DNS-серверы</label>
             <input id="f-dns" value="${esc(d.dns)}" placeholder="1.1.1.1, 8.8.8.8" spellcheck="false">
             <span class="err" id="e-dns" hidden>Перечислите IP-адреса через запятую</span></div>
@@ -1007,6 +1008,7 @@ Endpoint = vpn.example.org:51820"></textarea>
       ['addr', isCidrList(d.address)],
       ['port', d.port.trim()==='' || (/^\d+$/.test(d.port.trim()) && +d.port>0 && +d.port<65536)],
       ['mtu', d.mtu.trim()==='' || (/^\d+$/.test(d.mtu.trim()) && +d.mtu>=576 && +d.mtu<=9000)],
+      ['mtu6', !(d.mtu.trim() && +d.mtu < 1280 && d.address.split(',').some(a => a.includes(':')))],
       ['dns', d.dns.trim()==='' || isIpList(d.dns)],
       ['jc', (!d.jc.trim() && !d.jmin.trim() && !d.jmax.trim()) ||
              (isInt(d.jc,1,128) && isInt(d.jmin,0,1280) && isInt(d.jmax,0,1280) && +d.jmin <= +d.jmax)],
@@ -1014,10 +1016,12 @@ Endpoint = vpn.example.org:51820"></textarea>
     ];
     let ok = true;
     const advBox = app.querySelector('[data-adv="e"]');
-    if(checks.some(([k,v])=>!v && ['mtu','dns','jc','awgx'].includes(k)) && advBox) setAdv(advBox, true);
+    if(checks.some(([k,v])=>!v && ['mtu','mtu6','dns','jc','awgx'].includes(k)) && advBox) setAdv(advBox, true);
     for(const [k,v] of checks){
-      $('#e-'+k).hidden = v; $('#f-'+(k==='addr'?'addr':k)).classList.toggle('bad', !v);
-      if(!v && ok){ $('#f-'+k).focus(); ok=false; }
+      const fid = k==='mtu6' ? 'mtu' : k;
+      $('#e-'+k).hidden = v;
+      if(k!=='mtu6' || !v) $('#f-'+fid).classList.toggle('bad', !v);
+      if(!v && ok){ $('#f-'+fid).focus(); ok=false; }
     }
     $('#e-name').textContent = isName(d.name.trim()) ? 'Туннель с таким названием уже есть' : 'До 15 символов: латиница, цифры, _ = + . -';
     app.querySelectorAll('.peer').forEach(sec=>{
