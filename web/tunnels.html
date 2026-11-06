@@ -223,6 +223,7 @@ main.home .empty{padding:24px 20px 40px}
 .power-net.bad{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}
 .field.awg{gap:8px}
 .awg-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.seg.mimic{align-self:flex-start;flex-wrap:wrap}
 .awg-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .awg-row div{display:flex;flex-direction:column;gap:4px;min-width:0}
 .awg-row label{font-size:12px}
@@ -423,6 +424,18 @@ window.onAppResume = () => { syncRunning(); if(view.name==='list' || view.name==
 
 // ===== Маскировка AmneziaWG =====
 const AWG_JUNK = {jc:'4', jmin:'40', jmax:'70'};           // «мусорные пакеты»: работают и с обычными серверами
+// Пакет-«приманка» I1: отправляется перед каждым подключением и похож на другой протокол.
+// Работает с любым сервером, в том числе с WARP: сервер такие пакеты просто отбрасывает.
+const AWG_MIMIC = {
+  quic: {name:'QUIC', hint:'как начало соединения YouTube и Google', i1:'<b 0xc300000001><b 0x08><r 8><b 0x0000><b 0x44d0><r 1232>'},
+  dns:  {name:'DNS',  hint:'как запрос адреса сайта', i1:'<r 2><b 0x010000010000000000000377777706676f6f676c6503636f6d0000010001>'},
+  stun: {name:'STUN', hint:'как начало видеозвонка', i1:'<b 0x000100002112a442><r 12>'},
+};
+function mimicOf(awgx){
+  const i1 = (parseAwgExtra(awgx).out.find(([k]) => k === 'I1') || [])[1];
+  if(!i1) return 'none';
+  return Object.keys(AWG_MIMIC).find(k => AWG_MIMIC[k].i1 === i1) || 'custom';
+}
 const AWG_EXTRA_KEYS = ['S1','S2','S3','S4','H1','H2','H3','H4','I1','I2','I3','I4','I5']; // только для серверов AmneziaWG
 const isInt = (v, lo, hi) => /^\d+$/.test(String(v).trim()) && +v >= lo && +v <= hi;
 function parseAwgExtra(text){
@@ -437,6 +450,9 @@ function parseAwgExtra(text){
 const hasAwg = t => !!((t.jc||'').trim() || (t.awgx||'').trim());
 function awgSummary(t){
   if(!hasAwg(t)) return '';
+  const m = mimicOf(t.awgx);
+  if(m !== 'none' && m !== 'custom' && parseAwgExtra(t.awgx).out.length === 1)
+    return ((t.jc||'').trim() ? 'мусорные пакеты + ' : 'маскировка под ') + AWG_MIMIC[m].name;
   return (t.awgx||'').trim() ? 'маскировка AmneziaWG' : 'мусорные пакеты';
 }
 
@@ -902,6 +918,12 @@ function renderEdit(){
               <div><label for="f-jmax">Jmax</label><input id="f-jmax" value="${esc(d.jmax)}" placeholder="—" inputmode="numeric"></div>
             </div>
             <span class="err" id="e-jc" hidden>Jc — от 1 до 128, Jmin и Jmax — от 0 до 1280, Jmin не больше Jmax. Обычно 4, 40, 70</span>
+            <label>Маскировка под другой протокол <span class="opt">эксперимент</span></label>
+            <div class="seg mimic" role="group" aria-label="Маскировка под другой протокол">
+              <button type="button" data-mimic="none">Нет</button>
+              ${Object.entries(AWG_MIMIC).map(([k,m]) => `<button type="button" data-mimic="${k}" title="${m.hint}">${m.name}</button>`).join('')}
+            </div>
+            <span class="pastenote" id="mimic-hint"></span>
             <label for="f-awgx">Параметры сервера AmneziaWG</label>
             <textarea id="f-awgx" class="awgx" spellcheck="false" placeholder="S1 = 15&#10;H1 = 123456&#10;… — только если их выдал ваш сервер">${esc(d.awgx)}</textarea>
             <span class="err" id="e-awgx" hidden>Допустимы строки вида «S1 = 15»: S1–S4, H1–H4, I1–I5</span></div>`)}
@@ -945,6 +967,22 @@ Endpoint = vpn.example.org:51820"></textarea>
     Object.keys(AWG_JUNK).forEach(k => { d[k] = on ? AWG_JUNK[k] : ''; $('#f-'+k).value = d[k]; });
     $('#awg-junk').textContent = on ? 'Выключить мусорные пакеты' : 'Включить мусорные пакеты';
   };
+  const drawMimic = () => {
+    const cur = mimicOf(d.awgx);
+    app.querySelectorAll('[data-mimic]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mimic === cur));
+    $('#mimic-hint').textContent = cur === 'none' ? 'Перед подключением отправляется пакет, похожий на другой протокол. Помогает не всегда — пробуйте варианты по очереди.'
+      : cur === 'custom' ? 'Задан свой пакет I1 в параметрах ниже.'
+      : `Первый пакет выглядит ${AWG_MIMIC[cur].hint}. Не помогло — попробуйте другой вариант или смените порт.`;
+  };
+  app.querySelectorAll('[data-mimic]').forEach(b => b.onclick = () => {
+    const rest = parseAwgExtra(d.awgx).out.filter(([k]) => k !== 'I1');
+    if(b.dataset.mimic !== 'none') rest.unshift(['I1', AWG_MIMIC[b.dataset.mimic].i1]);
+    d.awgx = rest.map(([k,v]) => `${k} = ${v}`).join('\n');
+    $('#f-awgx').value = d.awgx;
+    drawMimic();
+  });
+  $('#f-awgx').addEventListener('input', drawMimic);
+  drawMimic();
   bindAdv();
   $('#gen').onclick = () => { d.priv = genPrivate(); $('#f-priv').value = d.priv; $('#f-pub').value = pubFromPriv(d.priv); };
   $('#cp').onclick = () => copy($('#f-pub').value, $('#f-pub'));
@@ -1058,7 +1096,7 @@ const FAQ = [
     {q:'Что такое туннель?', ex:null, a:`Туннель — это одно сохранённое VPN-подключение. Он состоит из двух частей: <b>интерфейса</b> (настройки вашего устройства) и одного или нескольких <b>пиров</b> (серверов, к которым вы подключаетесь). Весь трафик между вами и пиром шифруется.`},
     {q:'Весь трафик или одно приложение?', ex:'IncludedApplications = org.telegram.messenger', a:`Бегунок внизу главного экрана, рядом с «+». Слева — <b>VPN для всего устройства</b>: через туннель идёт трафик всех приложений. Справа — <b>для одного приложения</b>: вы выбираете приложение, и через VPN идёт только его трафик, а остальные работают напрямую. Выбор записывается в конфиг строкой <code>IncludedApplications</code>. Её понимает официальное приложение WireGuard для Android; на компьютерах и iPhone эта строка не поддерживается.`},
     {q:'Бесплатный WARP от Cloudflare', ex:'Endpoint = 162.159.192.1:2408', a:`Пункт в меню «+». Приложение регистрирует бесплатный аккаунт Cloudflare WARP и само создаёт туннель <code>warp</code> с включёнными мусорными пакетами. Перед этим выключите VPN. WARP не переносит вас в другую страну, а скрывает трафик от провайдера и открывает заблокированные сайты. Если под кнопкой пишет «Сервер не отвечает», попробуйте в Endpoint другой порт: <code>500</code>, <code>1701</code>, <code>4500</code>, <code>878</code> или <code>894</code>.`},
-    {q:'Маскировка AmneziaWG', ex:'Jc = 4, Jmin = 40, Jmax = 70', a:`Раздел «Дополнительно». Некоторые провайдеры узнают WireGuard по первым пакетам и обрывают соединение. <b>Мусорные пакеты</b> (Jc, Jmin, Jmax) отправляются перед подключением и сбивают такое распознавание; они работают с любым сервером. <b>Параметры сервера</b> (S1–S4, H1–H4, I1–I5) меняют сам вид трафика, но подходят только к серверу AmneziaWG, у которого такие же значения — берите их из его конфига, иначе подключение не заработает.`},
+    {q:'Маскировка AmneziaWG', ex:'Jc = 4, Jmin = 40, Jmax = 70', a:`Раздел «Дополнительно». Некоторые провайдеры узнают WireGuard по первым пакетам и обрывают соединение. <b>Мусорные пакеты</b> (Jc, Jmin, Jmax) отправляются перед подключением и сбивают такое распознавание; они работают с любым сервером. <b>Параметры сервера</b> (S1–S4, H1–H4, I1–I5) меняют сам вид трафика, но подходят только к серверу AmneziaWG, у которого такие же значения — берите их из его конфига, иначе подключение не заработает. <b>Маскировка под другой протокол</b> (QUIC, DNS, STUN) — эксперимент: перед подключением отправляется пакет, похожий на обычный трафик, чтобы провайдер принял всё соединение за него. Работает с любым сервером, но помогает не у всех провайдеров.`},
     {q:'Что значит строка под большой кнопкой?', ex:'Связь с сервером есть · ↓ 12 МБ · ↑ 1,4 МБ', a:`Это проверка, что VPN действительно работает. «Связь с сервером есть» — сервер отвечает, рядом видно, сколько данных прошло. «Сервер не отвечает» — туннель включён, но трафик никуда не идёт: обычно это блокировка, неверный ключ или Endpoint. Включите мусорные пакеты, смените порт или сервер.`},
     {q:'Откуда брать данные для полей?', ex:null, a:`Обычно их выдаёт администратор VPN-сервера или сервис, у которого вы купили VPN, — чаще всего готовым файлом <code>.conf</code>. В этом случае удобнее нажать «+» → «Импорт из текста .conf» и вставить содержимое файла: все поля заполнятся сами.`},
   ]},
