@@ -3,16 +3,19 @@ package app.localvpn
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import com.wireguard.android.backend.BackendException
-import com.wireguard.android.backend.GoBackend
-import com.wireguard.android.backend.Tunnel
-import com.wireguard.config.BadConfigException
-import com.wireguard.config.Config
+import org.amnezia.awg.backend.BackendException
+import org.amnezia.awg.backend.GoBackend
+import org.amnezia.awg.backend.NoopTunnelActionHandler
+import org.amnezia.awg.backend.Tunnel
+import org.amnezia.awg.config.BadConfigException
+import org.amnezia.awg.config.Config
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.util.concurrent.Executors
 
 /**
- * Включает и выключает туннели через официальную библиотеку WireGuard (GoBackend).
+ * Включает и выключает туннели через библиотеку AmneziaWG (GoBackend). Она понимает и обычные
+ * WireGuard-конфиги, и конфиги с маскировкой (Jc, Jmin, Jmax, S1, S2, H1–H4, I1–I5).
  * Одновременно может работать только один туннель — так устроен VPN в Android.
  */
 object VpnController {
@@ -21,6 +24,8 @@ object VpnController {
     private class NamedTunnel(private val tunnelName: String) : Tunnel {
         override fun getName(): String = tunnelName
         override fun onStateChange(newState: Tunnel.State) {}
+        override fun isIpv4ResolutionPreferred(): Boolean = true
+        override fun isMetered(): Boolean = false
     }
 
     private val worker = Executors.newSingleThreadExecutor()
@@ -29,7 +34,7 @@ object VpnController {
 
     private fun backend(context: Context): GoBackend =
         backend ?: synchronized(this) {
-            backend ?: GoBackend(context.applicationContext).also { backend = it }
+            backend ?: GoBackend(context.applicationContext, NoopTunnelActionHandler()).also { backend = it }
         }
 
     /** Имена туннелей, которые сейчас работают. */
@@ -72,6 +77,32 @@ object VpnController {
             }
             done(running(app), error)
         }
+    }
+
+    /**
+     * Статистика работающего туннеля: сколько получено и отправлено байт и когда сервер
+     * последний раз ответил (latestHandshake, мс с 1970 года; 0 — ни разу).
+     */
+    fun stats(context: Context): String {
+        val result = JSONObject()
+        try {
+            val name = running(context).firstOrNull() ?: return result.toString()
+            val tunnel = synchronized(tunnels) { tunnels[name] } ?: return result.toString()
+            val stats = backend(context).getStatistics(tunnel)
+            var handshake = 0L
+            for (key in stats.peers()) {
+                val peer = stats.peer(key) ?: continue
+                if (peer.latestHandshakeEpochMillis() > handshake) handshake = peer.latestHandshakeEpochMillis()
+            }
+            result.put("name", name)
+            result.put("rx", stats.totalRx())
+            result.put("tx", stats.totalTx())
+            result.put("handshake", handshake)
+            result.put("now", System.currentTimeMillis())
+        } catch (e: Exception) {
+            result.put("error", e.message ?: e.javaClass.simpleName)
+        }
+        return result.toString()
     }
 
     fun isInstalled(context: Context, pkg: String): Boolean =

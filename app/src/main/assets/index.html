@@ -232,6 +232,18 @@ main.home .empty{padding:24px 20px 40px}
 .sv-label{font:600 11px var(--display);fill:var(--muted)}
 .sv-val{font:12px var(--mono);fill:var(--fg)}
 .sv-val.sv-long{font-size:10.4px}
+.power-net{margin-top:4px;font-size:13px;font-weight:600;padding:5px 12px;border-radius:99px;max-width:34ch}
+.power-net.ok{color:var(--on);background:color-mix(in srgb,var(--on) 12%,transparent)}
+.power-net.wait{color:var(--muted);background:var(--field)}
+.power-net.bad{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}
+.field.awg{gap:8px}
+.awg-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.awg-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.awg-row div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.awg-row label{font-size:12px}
+textarea.awgx{width:100%;box-sizing:border-box;min-height:74px;border:1px solid transparent;background:var(--surface);color:var(--fg);border-radius:9px;padding:9px 12px;font:12.5px/1.5 var(--mono);resize:vertical}
+textarea.awgx:focus{outline:none;border-color:var(--accent)}
+textarea.awgx.bad{border-color:var(--danger)}
 .confpaste{display:flex;flex-direction:column;gap:6px}
 .confpaste textarea{width:100%;box-sizing:border-box;min-height:110px;border:1px dashed var(--line);background:var(--field);color:var(--fg);border-radius:9px;padding:10px 12px;font:12.5px/1.55 var(--mono);resize:vertical}
 .confpaste textarea:focus{outline:none;border-color:var(--accent);border-style:solid}
@@ -394,6 +406,7 @@ function setTunnelOn(id, on){
 // Ответ от Android: running — имена работающих туннелей, error — текст ошибки или null
 window.onTunnelState = (running, error) => {
   running = Array.isArray(running) ? running : [];
+  if(running.length && !tunnels.some(x => x.on)) upSince = Date.now();
   tunnels.forEach(x => { x.pending = false; x.on = running.includes(x.name); });
   save(); render();
   if(error) toast(error); else toast(running.length ? 'VPN подключён' : 'VPN отключён');
@@ -425,6 +438,25 @@ window.appBack = () => {
   go({name:'list'}); return true;
 };
 window.onAppResume = () => { syncRunning(); if(view.name==='list' || view.name==='detail') render(); };
+
+// ===== Маскировка AmneziaWG =====
+const AWG_JUNK = {jc:'4', jmin:'40', jmax:'70'};           // «мусорные пакеты»: работают и с обычными серверами
+const AWG_EXTRA_KEYS = ['S1','S2','S3','S4','H1','H2','H3','H4','I1','I2','I3','I4','I5']; // только для серверов AmneziaWG
+const isInt = (v, lo, hi) => /^\d+$/.test(String(v).trim()) && +v >= lo && +v <= hi;
+function parseAwgExtra(text){
+  const out = [], bad = [];
+  String(text||'').split('\n').map(l => l.trim()).filter(Boolean).forEach(l => {
+    const m = l.match(/^([A-Za-z0-9]+)\s*=\s*(.+)$/);
+    const key = m && AWG_EXTRA_KEYS.find(k => k.toLowerCase() === m[1].toLowerCase());
+    if(key) out.push([key, m[2].trim()]); else bad.push(l);
+  });
+  return {out, bad};
+}
+const hasAwg = t => !!((t.jc||'').trim() || (t.awgx||'').trim());
+function awgSummary(t){
+  if(!hasAwg(t)) return '';
+  return (t.awgx||'').trim() ? 'маскировка AmneziaWG' : 'мусорные пакеты';
+}
 
 const isPkg = v => /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(v.trim());
 let route = {mode:'all', app:null};
@@ -464,11 +496,13 @@ const ICON = {
   more:'<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
   pin:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>',
   help:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.4"/><circle cx="12" cy="17" r=".6" fill="currentColor"/></svg>',
+  cloud:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.3 9.6 4.2 4.2 0 0 0 7 18z"/></svg>',
   file:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H6v18h12V7l-4-4z"/><path d="M14 3v4h4"/></svg>',
 };
 
 // ---------- экраны ----------
 function render(){
+  setTimeout(watchNet, 0);
   if(view.name==='list') renderList();
   else if(view.name==='edit') renderEdit();
   else if(view.name==='detail') renderDetail();
@@ -495,7 +529,67 @@ function powerHtml(){
       </button>
       <div class="power-label">${label}</div>
       <div class="power-sub">${sub}</div>
+      <div class="power-net" id="power-net" role="status" hidden></div>
     </div>`;
+}
+
+// ===== Бесплатный Cloudflare WARP =====
+let warpBusy = false, warpPriv = null;
+function getWarp(){
+  if(!NATIVE){ toast('Получить WARP можно только в приложении LocalVPN на Android'); return; }
+  if(warpBusy) return;
+  if(tunnels.some(t => t.on)){ toast('Сначала выключите VPN: Cloudflare нужно ответить напрямую'); return; }
+  warpBusy = true; warpPriv = genPrivate();
+  toast('Получаю бесплатный конфиг у Cloudflare…');
+  NATIVE.warpRegister(pubFromPriv(warpPriv));
+}
+window.onWarpResult = (data, error) => {
+  warpBusy = false;
+  if(error || !data){ toast(error || 'Не удалось получить WARP'); return; }
+  let name = 'warp', n = 2;
+  while(tunnels.some(t => t.name === name)) name = 'warp' + n++;
+  const addr = [data.address4 && data.address4 + '/32', data.address6 && data.address6 + '/128'].filter(Boolean).join(', ');
+  const t = {id:uid(), on:false, name, priv:warpPriv, address:addr, port:'', mtu:'1280', dns:'1.1.1.1, 1.0.0.1',
+    ...AWG_JUNK, awgx:'',
+    peers:[{pub:data.peerPublicKey, psk:'', endpoint:data.endpoint, allowed:'0.0.0.0/0, ::/0', keepalive:'25'}]};
+  warpPriv = null;
+  tunnels.push(t); save();
+  lastTunnelId = t.id; try{ localStorage.setItem('tunnels.last', t.id); }catch(e){}
+  go({name:'list'});
+  toast(`Туннель ${name} создан, мусорные пакеты включены. Нажмите большую кнопку, чтобы подключиться`);
+};
+
+// ===== Индикатор «связь с сервером» (только в приложении) =====
+let netTimer = null, upSince = 0;
+function fmtBytes(b){
+  if(b < 1024) return b + ' Б';
+  const u = ['КБ','МБ','ГБ']; let i = -1;
+  do { b /= 1024; i++; } while(b >= 1024 && i < u.length-1);
+  return b.toLocaleString('ru-RU', {maximumFractionDigits: b < 10 ? 1 : 0}) + ' ' + u[i];
+}
+function netStatus(){
+  if(!NATIVE || !tunnels.some(t => t.on)) return null;
+  let st; try{ st = JSON.parse(NATIVE.getStats()); }catch(e){ return null; }
+  if(!st || st.error || st.name === undefined) return null;
+  const age = st.handshake ? (st.now - st.handshake) / 1000 : Infinity;
+  const traffic = `↓ ${fmtBytes(st.rx)} · ↑ ${fmtBytes(st.tx)}`;
+  if(age < 180) return {cls:'ok', text:`Связь с сервером есть · ${traffic}`};
+  const waited = (Date.now() - upSince) / 1000;
+  if(!st.handshake && waited < 15) return {cls:'wait', text:'Жду ответа от сервера…'};
+  return {cls:'bad', text:'Сервер не отвечает. Подключение, скорее всего, блокируется — см. FAQ'};
+}
+function updateNet(){
+  const el = document.getElementById('power-net'); if(!el) return;
+  const s = netStatus();
+  el.hidden = !s; if(!s) return;
+  el.className = 'power-net ' + s.cls; el.textContent = s.text;
+}
+function watchNet(){
+  clearInterval(netTimer); netTimer = null;
+  if(NATIVE && view.name === 'list' && tunnels.some(t => t.on)){
+    if(!upSince) upSince = Date.now();
+    updateNet(); netTimer = setInterval(updateNet, 2000);
+  } else if(!tunnels.some(t => t.on)) upSince = 0;
 }
 
 function renderList(){
@@ -533,6 +627,7 @@ function renderList(){
     <div class="menu" id="menu" hidden>
       <button id="m-new">${ICON.new} Создать с нуля</button>
       <button id="m-imp">${ICON.file} Импорт из текста .conf</button>
+      <button id="m-warp">${ICON.cloud} Бесплатный WARP от Cloudflare</button>
     </div>`;
 
   app.querySelectorAll('.row').forEach(r=>{
@@ -561,6 +656,7 @@ function renderList(){
   const seeEx = $('#see-ex'); if(seeEx) seeEx.onclick = () => { go({name:'faq'}); $('#examples')?.scrollIntoView(); };
   $('#m-new').onclick = () => go({name:'edit', id:null});
   $('#m-imp').onclick = () => go({name:'import'});
+  $('#m-warp').onclick = () => { $('#menu').hidden = true; getWarp(); };
 }
 
 function openAppPicker(onCancel){
@@ -658,6 +754,8 @@ function confText(t){
   if(t.port) s += `ListenPort = ${t.port}\n`;
   if(t.dns) s += `DNS = ${t.dns}\n`;
   if(t.mtu) s += `MTU = ${t.mtu}\n`;
+  if((t.jc||'').trim()) s += `Jc = ${t.jc}\nJmin = ${t.jmin}\nJmax = ${t.jmax}\n`;
+  for(const [k,v] of parseAwgExtra(t.awgx).out) s += `${k} = ${v}\n`;
   if(route.mode==='app') s += `# Только для приложения: ${route.app.n}\nIncludedApplications = ${route.app.p}\n`;
   for(const p of (t.peers||[])){
     s += `\n[Peer]\nPublicKey = ${p.pub}\n`;
@@ -697,7 +795,10 @@ function renderDetail(){
           <div class="field"><label>Порт</label><input readonly value="${esc(t.port||'автоматически')}"></div>
           ${advBlock('d', advSummary(t), `
             <div class="field sub"><label>MTU</label><input readonly value="${esc(t.mtu||'автоматически')}"></div>
-            <div class="field sub"><label>DNS-серверы</label><input readonly value="${esc(t.dns||'—')}"></div>`)}
+            <div class="field sub"><label>DNS-серверы</label><input readonly value="${esc(t.dns||'—')}"></div>
+            <div class="field sub"><label>Маскировка</label><input readonly value="${hasAwg(t)
+              ? esc([(t.jc||'').trim() ? `Jc ${t.jc} · Jmin ${t.jmin} · Jmax ${t.jmax}` : '', parseAwgExtra(t.awgx).out.map(([k])=>k).join(', ')].filter(Boolean).join(' · '))
+              : 'выключена'}"></div>`)}
         </div></div>
       ${(t.peers||[]).map((p,i)=>`
       <div class="section"><h2>Пир${t.peers.length>1?' '+(i+1):''}</h2>
@@ -737,6 +838,7 @@ function advSummary(t){
   const parts = [];
   if((t.mtu||'').trim()) parts.push('MTU ' + t.mtu.trim());
   if((t.dns||'').trim()) parts.push('DNS ' + t.dns.trim());
+  if(hasAwg(t)) parts.push(awgSummary(t));
   return parts.join(' · ');
 }
 // key: 'd' — карточка туннеля, 'e' — редактор. Пустой раздел свёрнут, пока его не откроют.
@@ -770,6 +872,7 @@ function renderEdit(){
   const d = view.draft || (existing ? {...existing, peers:(existing.peers||[]).map(p=>({...p}))} : {name:'', priv:genPrivate(), address:'', port:'', mtu:'', dns:'', peers:[newPeer()]});
   if(!Array.isArray(d.peers)) d.peers = [];
   if(d.mtu==null) d.mtu = '';
+  ['jc','jmin','jmax','awgx'].forEach(k => { if(d[k]==null) d[k] = ''; });
   view.draft = d;
   app.innerHTML = `
     <header>
@@ -801,7 +904,20 @@ function renderEdit(){
             <span class="err" id="e-mtu" hidden>MTU — число от 576 до 9000. Обычно 1420 или 1280</span></div>
           <div class="field sub"><label for="f-dns">DNS-серверы</label>
             <input id="f-dns" value="${esc(d.dns)}" placeholder="1.1.1.1, 8.8.8.8" spellcheck="false">
-            <span class="err" id="e-dns" hidden>Перечислите IP-адреса через запятую</span></div>`)}
+            <span class="err" id="e-dns" hidden>Перечислите IP-адреса через запятую</span></div>
+          <div class="field sub awg">
+            <div class="awg-head"><label>Маскировка AmneziaWG <span class="opt">необязательно</span></label>
+              <button type="button" class="small" id="awg-junk">${(d.jc||'').trim() ? 'Выключить мусорные пакеты' : 'Включить мусорные пакеты'}</button></div>
+            <span class="pastenote">Помогает, когда провайдер блокирует WireGuard. Мусорные пакеты работают с любым сервером, в том числе с WARP и Proton.</span>
+            <div class="awg-row">
+              <div><label for="f-jc">Jc</label><input id="f-jc" value="${esc(d.jc)}" placeholder="—" inputmode="numeric"></div>
+              <div><label for="f-jmin">Jmin</label><input id="f-jmin" value="${esc(d.jmin)}" placeholder="—" inputmode="numeric"></div>
+              <div><label for="f-jmax">Jmax</label><input id="f-jmax" value="${esc(d.jmax)}" placeholder="—" inputmode="numeric"></div>
+            </div>
+            <span class="err" id="e-jc" hidden>Jc — от 1 до 128, Jmin и Jmax — от 0 до 1280, Jmin не больше Jmax. Обычно 4, 40, 70</span>
+            <label for="f-awgx">Параметры сервера AmneziaWG</label>
+            <textarea id="f-awgx" class="awgx" spellcheck="false" placeholder="S1 = 15&#10;H1 = 123456&#10;… — только если их выдал ваш сервер">${esc(d.awgx)}</textarea>
+            <span class="err" id="e-awgx" hidden>Допустимы строки вида «S1 = 15»: S1–S4, H1–H4, I1–I5</span></div>`)}
         </div></div>
       ${d.peers.map((p,i)=>`
       <div class="section peer" data-i="${i}">
@@ -836,6 +952,12 @@ Endpoint = vpn.example.org:51820"></textarea>
 
   const bind = (id,key)=> $(id).addEventListener('input', e=>{ d[key]=e.target.value; if(key==='priv') $('#f-pub').value = pubFromPriv(d.priv)||''; });
   bind('#f-name','name'); bind('#f-priv','priv'); bind('#f-addr','address'); bind('#f-port','port'); bind('#f-dns','dns'); bind('#f-mtu','mtu');
+  bind('#f-jc','jc'); bind('#f-jmin','jmin'); bind('#f-jmax','jmax'); bind('#f-awgx','awgx');
+  $('#awg-junk').onclick = () => {
+    const on = !(d.jc||'').trim();
+    Object.keys(AWG_JUNK).forEach(k => { d[k] = on ? AWG_JUNK[k] : ''; $('#f-'+k).value = d[k]; });
+    $('#awg-junk').textContent = on ? 'Выключить мусорные пакеты' : 'Включить мусорные пакеты';
+  };
   bindAdv();
   $('#gen').onclick = () => { d.priv = genPrivate(); $('#f-priv').value = d.priv; $('#f-pub').value = pubFromPriv(d.priv); };
   $('#cp').onclick = () => copy($('#f-pub').value, $('#f-pub'));
@@ -900,10 +1022,13 @@ Endpoint = vpn.example.org:51820"></textarea>
       ['port', d.port.trim()==='' || (/^\d+$/.test(d.port.trim()) && +d.port>0 && +d.port<65536)],
       ['mtu', d.mtu.trim()==='' || (/^\d+$/.test(d.mtu.trim()) && +d.mtu>=576 && +d.mtu<=9000)],
       ['dns', d.dns.trim()==='' || isIpList(d.dns)],
+      ['jc', (!d.jc.trim() && !d.jmin.trim() && !d.jmax.trim()) ||
+             (isInt(d.jc,1,128) && isInt(d.jmin,0,1280) && isInt(d.jmax,0,1280) && +d.jmin <= +d.jmax)],
+      ['awgx', parseAwgExtra(d.awgx).bad.length === 0],
     ];
     let ok = true;
     const advBox = app.querySelector('[data-adv="e"]');
-    if(checks.some(([k,v])=>!v && (k==='mtu'||k==='dns')) && advBox) setAdv(advBox, true);
+    if(checks.some(([k,v])=>!v && ['mtu','dns','jc','awgx'].includes(k)) && advBox) setAdv(advBox, true);
     for(const [k,v] of checks){
       $('#e-'+k).hidden = v; $('#f-'+(k==='addr'?'addr':k)).classList.toggle('bad', !v);
       if(!v && ok){ $('#f-'+k).focus(); ok=false; }
@@ -930,6 +1055,7 @@ Endpoint = vpn.example.org:51820"></textarea>
     });
     if(!ok) return;
     const clean = {name:d.name.trim(), priv:d.priv.trim(), address:d.address.trim(), port:d.port.trim(), mtu:d.mtu.trim(), dns:d.dns.trim(),
+      jc:d.jc.trim(), jmin:d.jmin.trim(), jmax:d.jmax.trim(), awgx:parseAwgExtra(d.awgx).out.map(([k,v])=>`${k} = ${v}`).join('\n'),
       peers:d.peers.map(p=>({pub:p.pub.trim(), psk:p.psk.trim(), endpoint:p.endpoint.trim(), allowed:p.allowed.trim(), keepalive:p.keepalive.trim()}))};
     if(existing){ const oldName = existing.name; Object.assign(existing, clean); delete existing.example; save(); go({name:'detail', id:existing.id}); if(existing.on) reapplyRunning(oldName); }
     else { const t = {id:uid(), on:false, ...clean}; tunnels.push(t); save(); go({name:'list'}); }
@@ -941,6 +1067,9 @@ const FAQ = [
   {group:'Общее', items:[
     {q:'Что такое туннель?', ex:null, a:`Туннель — это одно сохранённое VPN-подключение. Он состоит из двух частей: <b>интерфейса</b> (настройки вашего устройства) и одного или нескольких <b>пиров</b> (серверов, к которым вы подключаетесь). Весь трафик между вами и пиром шифруется.`},
     {q:'Весь трафик или одно приложение?', ex:'IncludedApplications = org.telegram.messenger', a:`Бегунок внизу главного экрана, рядом с «+». Слева — <b>VPN для всего устройства</b>: через туннель идёт трафик всех приложений. Справа — <b>для одного приложения</b>: вы выбираете приложение, и через VPN идёт только его трафик, а остальные работают напрямую. Выбор записывается в конфиг строкой <code>IncludedApplications</code>. Её понимает официальное приложение WireGuard для Android; на компьютерах и iPhone эта строка не поддерживается.`},
+    {q:'Бесплатный WARP от Cloudflare', ex:'Endpoint = 162.159.192.1:2408', a:`Пункт в меню «+». Приложение регистрирует бесплатный аккаунт Cloudflare WARP и само создаёт туннель <code>warp</code> с включёнными мусорными пакетами. Перед этим выключите VPN. WARP не переносит вас в другую страну, а скрывает трафик от провайдера и открывает заблокированные сайты. Если под кнопкой пишет «Сервер не отвечает», попробуйте в Endpoint другой порт: <code>500</code>, <code>1701</code>, <code>4500</code>, <code>878</code> или <code>894</code>.`},
+    {q:'Маскировка AmneziaWG', ex:'Jc = 4, Jmin = 40, Jmax = 70', a:`Раздел «Дополнительно». Некоторые провайдеры узнают WireGuard по первым пакетам и обрывают соединение. <b>Мусорные пакеты</b> (Jc, Jmin, Jmax) отправляются перед подключением и сбивают такое распознавание; они работают с любым сервером. <b>Параметры сервера</b> (S1–S4, H1–H4, I1–I5) меняют сам вид трафика, но подходят только к серверу AmneziaWG, у которого такие же значения — берите их из его конфига, иначе подключение не заработает.`},
+    {q:'Что значит строка под большой кнопкой?', ex:'Связь с сервером есть · ↓ 12 МБ · ↑ 1,4 МБ', a:`Это проверка, что VPN действительно работает. «Связь с сервером есть» — сервер отвечает, рядом видно, сколько данных прошло. «Сервер не отвечает» — туннель включён, но трафик никуда не идёт: обычно это блокировка, неверный ключ или Endpoint. Включите мусорные пакеты, смените порт или сервер.`},
     {q:'Откуда брать данные для полей?', ex:null, a:`Обычно их выдаёт администратор VPN-сервера или сервис, у которого вы купили VPN, — чаще всего готовым файлом <code>.conf</code>. В этом случае удобнее нажать «+» → «Импорт из текста .conf» и вставить содержимое файла: все поля заполнятся сами.`},
   ]},
   {group:'Интерфейс — ваше устройство', items:[
@@ -1098,7 +1227,9 @@ DNS = 1.1.1.1"></textarea>
     if(!getIn(iface,'PrivateKey')){ toast('В тексте нет строки PrivateKey'); return; }
     const peers = blocks.slice(1).map(b=>({pub:getIn(b,'PublicKey'), psk:getIn(b,'PresharedKey'), endpoint:getIn(b,'Endpoint'),
       allowed:getIn(b,'AllowedIPs'), keepalive:getIn(b,'PersistentKeepalive')}));
-    view = {name:'edit', id:null, draft:{name:'', priv:getIn(iface,'PrivateKey'), address:getIn(iface,'Address'), port:getIn(iface,'ListenPort'), mtu:getIn(iface,'MTU'), dns:getIn(iface,'DNS'), peers}};
+    view = {name:'edit', id:null, draft:{name:'', priv:getIn(iface,'PrivateKey'), address:getIn(iface,'Address'), port:getIn(iface,'ListenPort'), mtu:getIn(iface,'MTU'), dns:getIn(iface,'DNS'),
+      jc:getIn(iface,'Jc'), jmin:getIn(iface,'Jmin'), jmax:getIn(iface,'Jmax'),
+      awgx:AWG_EXTRA_KEYS.map(k=>[k,getIn(iface,k)]).filter(([,v])=>v).map(([k,v])=>`${k} = ${v}`).join('\n'), peers}};
     render();
   };
 }

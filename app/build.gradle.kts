@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -11,7 +13,7 @@ val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 
 android {
     namespace = "app.localvpn"
-    compileSdk = 34
+    compileSdk = 36 // нужно библиотеке AmneziaWG
 
     defaultConfig {
         applicationId = "app.localvpn"
@@ -42,10 +44,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        isCoreLibraryDesugaringEnabled = true // нужно библиотеке WireGuard
-    }
-    kotlinOptions {
-        jvmTarget = "17"
+        isCoreLibraryDesugaringEnabled = true
     }
     lint {
         checkReleaseBuilds = false
@@ -53,9 +52,16 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
-    implementation("com.wireguard.android:tunnel:1.0.20230706")
+    // AmneziaWG: WireGuard с маскировкой трафика. Обычные WireGuard-конфиги тоже работают.
+    implementation("com.zaneschepke:amneziawg-android:2.3.7")
     implementation("androidx.activity:activity-ktx:1.9.1")
     implementation("androidx.webkit:webkit:1.11.0")
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

@@ -33,6 +33,7 @@ import java.util.concurrent.Executors
 class MainActivity : ComponentActivity() {
 
     private lateinit var web: WebView
+    private val background = Executors.newSingleThreadExecutor()
     private var pendingName: String? = null
     private var pendingConfig: String? = null
 
@@ -148,6 +149,27 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 VpnController.apply(this@MainActivity, name, on, config, this@MainActivity::deliver)
+            }
+        }
+
+        /** Статистика работающего туннеля для индикатора «связь с сервером». */
+        @JavascriptInterface
+        fun getStats(): String = VpnController.stats(this@MainActivity)
+
+        /** Получает бесплатный конфиг Cloudflare WARP. Ответ — window.onWarpResult(data, error). */
+        @JavascriptInterface
+        fun warpRegister(publicKey: String) {
+            background.execute {
+                var data: String? = null
+                var error: String? = null
+                try {
+                    data = Warp.register(publicKey)
+                } catch (e: Exception) {
+                    error = Warp.humanError(e)
+                }
+                val js = "window.onWarpResult && window.onWarpResult(" +
+                    (data ?: "null") + ", " + (if (error == null) "null" else JSONObject.quote(error)) + ")"
+                runOnUiThread { if (!isDestroyed) web.evaluateJavascript(js, null) }
             }
         }
 

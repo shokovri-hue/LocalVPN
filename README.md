@@ -2,7 +2,7 @@
 
 Android-приложение для VPN-туннелей на протоколе WireGuard: список туннелей, создание через «+», настройки интерфейса и пиров, FAQ, режим «VPN только для одного приложения» с избранным.
 
-Подключение работает через официальную открытую библиотеку [WireGuard tunnel](https://git.zx2c4.com/wireguard-android/about/) (Apache 2.0). LocalVPN не связан с проектом WireGuard; WireGuard — товарный знак Jason A. Donenfeld.
+Подключение работает через открытую библиотеку [amneziawg-android](https://central.sonatype.com/artifact/com.zaneschepke/amneziawg-android) (Apache 2.0): она понимает обычные WireGuard-конфиги и конфиги AmneziaWG с маскировкой трафика. Бесплатный конфиг Cloudflare WARP приложение получает само, по образцу открытого проекта [wgcf](https://github.com/ViRb3/wgcf). LocalVPN не связан с проектами WireGuard, AmneziaWG и Cloudflare; WireGuard — товарный знак Jason A. Donenfeld.
 
 ## Как получить APK
 
@@ -30,7 +30,8 @@ Android обновляет приложение, только если нова�
 - `web/tunnels.html` — интерфейс, тот же, что и в браузерной версии.
 - `tools/build_web.py` — делает из него офлайн-страницу `app/src/main/assets/index.html` (локальные шрифты и библиотека ключей). После правок в `web/tunnels.html` запустите `python3 tools/build_web.py`.
 - `app/src/main/java/app/localvpn/MainActivity.kt` — окно с интерфейсом и мост `window.Android` для страницы.
-- `app/src/main/java/app/localvpn/VpnController.kt` — включение и выключение туннеля, понятные тексты ошибок.
+- `app/src/main/java/app/localvpn/VpnController.kt` — включение и выключение туннеля, статистика, понятные тексты ошибок.
+- `app/src/main/java/app/localvpn/Warp.kt` — получение бесплатного конфига Cloudflare WARP.
 - `.github/workflows/build.yml` — автоматическая сборка APK.
 
 ## Требования
