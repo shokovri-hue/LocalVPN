@@ -755,7 +755,11 @@ function confText(t){
   if(t.dns) s += `DNS = ${t.dns}\n`;
   if(t.mtu) s += `MTU = ${t.mtu}\n`;
   if((t.jc||'').trim()) s += `Jc = ${t.jc}\nJmin = ${t.jmin}\nJmax = ${t.jmax}\n`;
-  for(const [k,v] of parseAwgExtra(t.awgx).out) s += `${k} = ${v}\n`;
+  const extra = parseAwgExtra(t.awgx).out;
+  for(const [k,v] of extra) s += `${k} = ${v}\n`;
+  // Движку AmneziaWG нужны H1–H4 всегда, когда включена маскировка. Значения 1–4 —
+  // это обычные заголовки WireGuard: так мусорные пакеты работают с любым сервером.
+  if(hasAwg(t)) ['H1','H2','H3','H4'].forEach((k,i) => { if(!extra.some(([x]) => x === k)) s += `${k} = ${i+1}\n`; });
   if(route.mode==='app') s += `# Только для приложения: ${route.app.n}\nIncludedApplications = ${route.app.p}\n`;
   for(const p of (t.peers||[])){
     s += `\n[Peer]\nPublicKey = ${p.pub}\n`;

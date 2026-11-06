@@ -72,7 +72,7 @@ object VpnController {
                 } else {
                     backend(app).setState(tunnel, Tunnel.State.DOWN, null)
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 error = humanError(e)
             }
             done(running(app), error)
@@ -99,7 +99,7 @@ object VpnController {
             result.put("tx", stats.totalTx())
             result.put("handshake", handshake)
             result.put("now", System.currentTimeMillis())
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             result.put("error", e.message ?: e.javaClass.simpleName)
         }
         return result.toString()
@@ -119,7 +119,7 @@ object VpnController {
         }
 
     /** Понятный текст ошибки на русском. */
-    private fun humanError(e: Exception): String = when (e) {
+    private fun humanError(e: Throwable): String = when (e) {
         is BackendException -> when (e.reason) {
             BackendException.Reason.VPN_NOT_AUTHORIZED ->
                 "Нет разрешения на VPN. Включите туннель ещё раз и нажмите «ОК» в окне Android"
@@ -128,7 +128,7 @@ object VpnController {
             BackendException.Reason.UNABLE_TO_START_VPN, BackendException.Reason.TUN_CREATION_ERROR ->
                 "Android не дал запустить VPN. Проверьте, не включён ли «Постоянный VPN» у другого приложения"
             BackendException.Reason.GO_ACTIVATION_ERROR_CODE ->
-                "Туннель не запустился (код ${e.format.firstOrNull() ?: "?"}). Проверьте ключи и адреса"
+                "Туннель не запустился: движок отклонил настройки. Проверьте ключи, адреса и маскировку в «Дополнительно»"
             else -> "Не удалось включить туннель: ${e.reason}"
         }
         is BadConfigException -> {
@@ -144,6 +144,7 @@ object VpnController {
             "Ошибка в настройках: $field — $what. Откройте туннель и нажмите «Изменить»"
         }
         is IllegalStateException -> e.message ?: "Не удалось включить туннель"
+        is UnsatisfiedLinkError -> "Движок VPN не загрузился на этом телефоне. Напишите разработчику модель телефона"
         else -> "Не удалось включить туннель: ${e.message ?: e.javaClass.simpleName}"
     }
 }
