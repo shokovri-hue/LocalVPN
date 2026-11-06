@@ -232,6 +232,13 @@ main.home .empty{padding:24px 20px 40px}
 .sv-label{font:600 11px var(--display);fill:var(--muted)}
 .sv-val{font:12px var(--mono);fill:var(--fg)}
 .sv-val.sv-long{font-size:10.4px}
+.keyrow{display:flex;align-items:center;gap:8px;margin-top:10px;width:min(340px,100%);padding:8px 8px 8px 14px;
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;box-sizing:border-box}
+.keyrow label{font-size:13px;font-weight:700;color:var(--muted)}
+.keyrow input{flex:1;min-width:0;border:0;background:transparent;color:var(--fg);font:14px var(--mono);letter-spacing:.08em;padding:6px 0}
+.keyrow input::placeholder{color:var(--muted);letter-spacing:0;font-family:var(--display)}
+.keyrow input:focus{outline:none}
+.keyrow .small.confirm{background:var(--danger);border-color:var(--danger);color:#fff}
 .power-net{margin-top:4px;font-size:13px;font-weight:600;padding:5px 12px;border-radius:99px;max-width:34ch}
 .power-net.ok{color:var(--on);background:color-mix(in srgb,var(--on) 12%,transparent)}
 .power-net.wait{color:var(--muted);background:var(--field)}
@@ -390,6 +397,37 @@ const findApp = p => srcApps().find(a => a.p === p);
 let lastTunnelId = null;
 try{ lastTunnelId = localStorage.getItem('tunnels.last'); }catch(e){}
 // Какой туннель включает большая кнопка: работающий, иначе последний включённый, иначе первый
+// ===== Встроенный туннель большой кнопки =====
+// Настройки зашиты в приложение и не показываются пользователю. Ключ у каждого свой:
+// «Сгенерировать» создаёт его и регистрирует в Cloudflare WARP.
+const MAIN_NAME = 'localvpn';
+const MAIN_PRESET = {
+  address:'172.16.0.2/32', dns:'1.1.1.1, 1.0.0.1', mtu:'1200',
+  jc:'4', jmin:'40', jmax:'70',
+  i1:'<r 2><b 0x010000010000000000000377777706676f6f676c6503636f6d0000010001>', // маскировка под DNS
+  peerPub:'bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=', endpoint:'162.159.192.7:2408',
+  allowed:'0.0.0.0/0, ::/0', keepalive:'25',
+};
+const main = {priv:'', address:'', peerPub:'', on:false, pending:false};
+try{ Object.assign(main, JSON.parse(localStorage.getItem('tunnels.main')) || {}, {on:false, pending:false}); }catch(e){}
+function saveMain(){ try{ localStorage.setItem('tunnels.main', JSON.stringify({priv:main.priv, address:main.address, peerPub:main.peerPub})); }catch(e){} }
+function mainConf(){
+  return confText({name:MAIN_NAME, priv:main.priv, address:main.address || MAIN_PRESET.address, port:'',
+    mtu:MAIN_PRESET.mtu, dns:MAIN_PRESET.dns, jc:MAIN_PRESET.jc, jmin:MAIN_PRESET.jmin, jmax:MAIN_PRESET.jmax,
+    awgx:'I1 = ' + MAIN_PRESET.i1,
+    peers:[{pub:main.peerPub || MAIN_PRESET.peerPub, psk:'', endpoint:MAIN_PRESET.endpoint, allowed:MAIN_PRESET.allowed, keepalive:MAIN_PRESET.keepalive}]});
+}
+function setMainOn(on){
+  if(on && !main.priv){ toast('Сначала нажмите «Сгенерировать», чтобы получить ключ'); return; }
+  if(!NATIVE){
+    main.on = on; tunnels.forEach(x => x.on = false); save(); render();
+    toast(on ? 'VPN включён' : 'VPN выключен'); return;
+  }
+  main.pending = true; render();
+  NATIVE.setTunnel(MAIN_NAME, on, on ? mainConf() : '');
+}
+const anyOn = () => main.on || tunnels.some(t => t.on);
+
 function powerTarget(){
   return tunnels.find(x => x.on) || tunnels.find(x => x.id === lastTunnelId) || tunnels[0] || null;
 }
@@ -397,6 +435,7 @@ function setTunnelOn(id, on){
   const t = tunnels.find(x => x.id === id); if(!t) return;
   if(on){ lastTunnelId = id; try{ localStorage.setItem('tunnels.last', id); }catch(e){} }
   if(!NATIVE){
+    if(on) main.on = false;
     tunnels.forEach(x => x.on = x.id === id ? on : false);
     save(); render(); toast(on ? 'Туннель включён' : 'Туннель выключен');
     return;
@@ -407,14 +446,16 @@ function setTunnelOn(id, on){
 // Ответ от Android: running — имена работающих туннелей, error — текст ошибки или null
 window.onTunnelState = (running, error) => {
   running = Array.isArray(running) ? running : [];
-  if(running.length && !tunnels.some(x => x.on)) upSince = Date.now();
+  if(running.length && !anyOn()) upSince = Date.now();
   tunnels.forEach(x => { x.pending = false; x.on = running.includes(x.name); });
+  main.pending = false; main.on = running.includes(MAIN_NAME);
   save(); render();
   if(error) toast(error); else toast(running.length ? 'VPN подключён' : 'VPN отключён');
 };
 // После изменения настроек работающего туннеля переподключаем его с новым конфигом
 function reapplyRunning(oldName){
   if(!NATIVE) return;
+  if(main.on){ main.pending = true; NATIVE.setTunnel(MAIN_NAME, true, mainConf()); return; }
   const t = tunnels.find(x => x.on); if(!t) return;
   if(oldName && oldName !== t.name) NATIVE.setTunnel(oldName, false, '');
   t.pending = true;
@@ -425,6 +466,7 @@ function syncRunning(){
   try{
     const running = JSON.parse(NATIVE.getRunning());
     tunnels.forEach(t => { t.on = running.includes(t.name); t.pending = false; });
+    main.on = running.includes(MAIN_NAME); main.pending = false;
   }catch(e){}
 }
 // Кнопка «Назад» на телефоне. Возвращает true, если обработали сами.
@@ -528,13 +570,12 @@ function render(){
 }
 
 function powerHtml(){
-  const t = powerTarget();
-  const on = !!t?.on, busy = !!t?.pending;
+  const on = main.on, busy = main.pending, hasKey = !!main.priv;
   const state = busy ? 'busy' : on ? 'on' : 'off';
-  const label = !t ? 'Нет туннелей' : busy ? 'Подключение…' : on ? 'VPN включён' : 'VPN выключен';
-  const sub = !t ? 'Создайте туннель кнопкой «+»'
-    : on ? `Туннель ${esc(t.name)}${route.mode==='app' ? ' · только ' + esc(route.app.n) : ''}`
-    : busy ? esc(t.name) : `Нажмите, чтобы включить ${esc(t.name)}`;
+  const label = !hasKey ? 'Нужен ключ' : busy ? 'Подключение…' : on ? 'VPN включён' : 'VPN выключен';
+  const sub = !hasKey ? 'Нажмите «Сгенерировать» ниже — это нужно один раз'
+    : on ? `Защищено${route.mode==='app' ? ' · только ' + esc(route.app.n) : ''}`
+    : busy ? 'Подождите несколько секунд' : 'Нажмите, чтобы включить';
   return `<div class="power ${state}">
       <button type="button" class="power-btn" id="power" ${busy?'disabled':''} aria-pressed="${on}"
         aria-label="${on ? 'Выключить VPN' : 'Включить VPN'}">
@@ -546,21 +587,40 @@ function powerHtml(){
       <div class="power-label">${label}</div>
       <div class="power-sub">${sub}</div>
       <div class="power-net" id="power-net" role="status" hidden></div>
+      <div class="keyrow">
+        <label for="main-key">Ключ</label>
+        <input id="main-key" readonly value="${hasKey ? '••••••••••••' : ''}" placeholder="не создан">
+        <button type="button" class="small" id="main-gen" ${busy || keyBusy ? 'disabled' : ''}>${keyBusy ? 'Получаю…' : 'Сгенерировать'}</button>
+      </div>
     </div>`;
 }
 
 // ===== Бесплатный Cloudflare WARP =====
-let warpBusy = false, warpPriv = null;
-function getWarp(){
-  if(!NATIVE){ toast('Получить WARP можно только в приложении LocalVPN на Android'); return; }
+let warpBusy = false, warpPriv = null, warpFor = 'list', keyBusy = false;
+function getWarp(target){
+  warpFor = target === 'main' ? 'main' : 'list';
+  if(!NATIVE){ toast('Ключ можно получить только в приложении LocalVPN на Android'); return; }
   if(warpBusy) return;
-  if(tunnels.some(t => t.on)){ toast('Сначала выключите VPN: Cloudflare нужно ответить напрямую'); return; }
+  if(anyOn()){ toast('Сначала выключите VPN: Cloudflare нужно ответить напрямую'); return; }
   warpBusy = true; warpPriv = genPrivate();
+  if(warpFor === 'main'){ keyBusy = true; render(); }
   toast('Получаю бесплатный конфиг у Cloudflare…');
   NATIVE.warpRegister(pubFromPriv(warpPriv));
 }
 window.onWarpResult = (data, error) => {
   warpBusy = false;
+  if(warpFor === 'main'){
+    keyBusy = false;
+    if(error || !data){
+      render();
+      toast((error || 'Не удалось получить ключ') + '. Если Cloudflare заблокирован, включите на минуту другой VPN и нажмите «Сгенерировать» ещё раз');
+      return;
+    }
+    main.priv = warpPriv; main.address = data.address4 ? data.address4 + '/32' : ''; main.peerPub = data.peerPublicKey || '';
+    warpPriv = null; saveMain(); render();
+    toast('Ключ создан. Нажмите большую кнопку, чтобы включить VPN');
+    return;
+  }
   if(error || !data){ toast(error || 'Не удалось получить WARP'); return; }
   let name = 'warp', n = 2;
   while(tunnels.some(t => t.name === name)) name = 'warp' + n++;
@@ -572,7 +632,7 @@ window.onWarpResult = (data, error) => {
   tunnels.push(t); save();
   lastTunnelId = t.id; try{ localStorage.setItem('tunnels.last', t.id); }catch(e){}
   go({name:'list'});
-  toast(`Туннель ${name} создан, мусорные пакеты включены. Нажмите большую кнопку, чтобы подключиться`);
+  toast(`Туннель ${name} создан, мусорные пакеты включены. Включите его переключателем в списке`);
 };
 
 // ===== Индикатор «связь с сервером» (только в приложении) =====
@@ -584,7 +644,7 @@ function fmtBytes(b){
   return b.toLocaleString('ru-RU', {maximumFractionDigits: b < 10 ? 1 : 0}) + ' ' + u[i];
 }
 function netStatus(){
-  if(!NATIVE || !tunnels.some(t => t.on)) return null;
+  if(!NATIVE || !anyOn()) return null;
   let st; try{ st = JSON.parse(NATIVE.getStats()); }catch(e){ return null; }
   if(!st || st.error || st.name === undefined) return null;
   const age = st.handshake ? (st.now - st.handshake) / 1000 : Infinity;
@@ -602,10 +662,10 @@ function updateNet(){
 }
 function watchNet(){
   clearInterval(netTimer); netTimer = null;
-  if(NATIVE && view.name === 'list' && tunnels.some(t => t.on)){
+  if(NATIVE && view.name === 'list' && anyOn()){
     if(!upSince) upSince = Date.now();
     updateNet(); netTimer = setInterval(updateNet, 2000);
-  } else if(!tunnels.some(t => t.on)) upSince = 0;
+  } else if(!anyOn()) upSince = 0;
 }
 
 function renderList(){
@@ -652,11 +712,14 @@ function renderList(){
     r.addEventListener('keydown', e=>{ if(e.key==='Enter') go({name:'detail', id}); });
     r.querySelector('input').addEventListener('change', e=> setTunnelOn(id, e.target.checked)); // одновременно активен только один
   });
-  $('#power').onclick = e => {
+  $('#power').onclick = e => { e.stopPropagation(); setMainOn(!main.on); };
+  $('#main-gen').onclick = e => {
     e.stopPropagation();
-    const t = powerTarget();
-    if(!t){ toast('Сначала создайте туннель кнопкой «+»'); $('#menu').hidden = false; return; }
-    setTunnelOn(t.id, !t.on);
+    if(main.priv && !keyBusy){
+      const b = e.currentTarget;
+      if(!b.classList.contains('confirm')){ b.classList.add('confirm'); b.textContent = 'Заменить ключ?'; return; }
+    }
+    getWarp('main');
   };
   const menu = $('#menu'), top = $('#topmenu'), more = $('#more');
   $('#fab').onclick = e => { e.stopPropagation(); top.hidden = true; menu.hidden = !menu.hidden; };
@@ -1059,7 +1122,7 @@ Endpoint = vpn.example.org:51820"></textarea>
 
   function doSave(){
     const checks = [
-      ['name', isName(d.name.trim()) && !tunnels.some(x=>x.name===d.name.trim() && x.id!==existing?.id)],
+      ['name', isName(d.name.trim()) && d.name.trim().toLowerCase() !== MAIN_NAME && !tunnels.some(x=>x.name===d.name.trim() && x.id!==existing?.id)],
       ['priv', !!pubFromPriv(d.priv)],
       ['addr', isCidrList(d.address)],
       ['port', d.port.trim()==='' || (/^\d+$/.test(d.port.trim()) && +d.port>0 && +d.port<65536)],
@@ -1079,7 +1142,9 @@ Endpoint = vpn.example.org:51820"></textarea>
       if(k!=='mtu6' || !v) $('#f-'+fid).classList.toggle('bad', !v);
       if(!v && ok){ $('#f-'+fid).focus(); ok=false; }
     }
-    $('#e-name').textContent = isName(d.name.trim()) ? 'Туннель с таким названием уже есть' : 'До 15 символов: латиница, цифры, _ = + . -';
+    $('#e-name').textContent = !isName(d.name.trim()) ? 'До 15 символов: латиница, цифры, _ = + . -'
+      : d.name.trim().toLowerCase() === MAIN_NAME ? 'Это название занято большой кнопкой, выберите другое'
+      : 'Туннель с таким названием уже есть';
     app.querySelectorAll('.peer').forEach(sec=>{
       const p = d.peers[+sec.dataset.i];
       const ka = p.keepalive.trim();
@@ -1113,6 +1178,7 @@ const FAQ = [
   {group:'Общее', items:[
     {q:'Что такое туннель?', ex:null, a:`Туннель — это одно сохранённое VPN-подключение. Он состоит из двух частей: <b>интерфейса</b> (настройки вашего устройства) и одного или нескольких <b>пиров</b> (серверов, к которым вы подключаетесь). Весь трафик между вами и пиром шифруется.`},
     {q:'Весь трафик или одно приложение?', ex:'IncludedApplications = org.telegram.messenger', a:`Бегунок внизу главного экрана, рядом с «+». Слева — <b>VPN для всего устройства</b>: через туннель идёт трафик всех приложений. Справа — <b>для одного приложения</b>: вы выбираете приложение, и через VPN идёт только его трафик, а остальные работают напрямую. Выбор записывается в конфиг строкой <code>IncludedApplications</code>. Её понимает официальное приложение WireGuard для Android; на компьютерах и iPhone эта строка не поддерживается.`},
+    {q:'Как работает большая кнопка?', ex:null, a:`Большая кнопка включает встроенный VPN с готовыми настройками: бесплатный сервер Cloudflare WARP, маскировка под DNS и мусорные пакеты. Настраивать ничего не нужно — один раз нажмите <b>«Сгенерировать»</b> под кнопкой: приложение создаст ваш личный ключ и зарегистрирует его. Перед этим выключите любой VPN. Если появилась ошибка, что Cloudflare не ответил, включите на минуту другой VPN (например, Proton) и нажмите «Сгенерировать» ещё раз. Туннели из списка работают отдельно и включаются своими переключателями.`},
     {q:'Бесплатный WARP от Cloudflare', ex:'Endpoint = 162.159.192.1:2408', a:`Пункт в меню «+». Приложение регистрирует бесплатный аккаунт Cloudflare WARP и само создаёт туннель <code>warp</code> с включёнными мусорными пакетами. Перед этим выключите VPN. WARP не переносит вас в другую страну, а скрывает трафик от провайдера и открывает заблокированные сайты. Если под кнопкой пишет «Сервер не отвечает», попробуйте в Endpoint другой порт: <code>500</code>, <code>1701</code>, <code>4500</code>, <code>878</code> или <code>894</code>.`},
     {q:'Маскировка AmneziaWG', ex:'Jc = 4, Jmin = 40, Jmax = 70', a:`Раздел «Дополнительно». Некоторые провайдеры узнают WireGuard по первым пакетам и обрывают соединение. <b>Мусорные пакеты</b> (Jc, Jmin, Jmax) отправляются перед подключением и сбивают такое распознавание; они работают с любым сервером. <b>Параметры сервера</b> (S1–S4, H1–H4, I1–I5) меняют сам вид трафика, но подходят только к серверу AmneziaWG, у которого такие же значения — берите их из его конфига, иначе подключение не заработает. <b>Маскировка под другой протокол</b> (QUIC, DNS, STUN) — эксперимент: перед подключением отправляется пакет, похожий на обычный трафик, чтобы провайдер принял всё соединение за него. Работает с любым сервером, но помогает не у всех провайдеров.`},
     {q:'Что значит строка под большой кнопкой?', ex:'Связь с сервером есть · ↓ 12 МБ · ↑ 1,4 МБ', a:`Это проверка, что VPN действительно работает. «Связь с сервером есть» — сервер отвечает, рядом видно, сколько данных прошло. «Сервер не отвечает» — туннель включён, но трафик никуда не идёт: обычно это блокировка, неверный ключ или Endpoint. Включите мусорные пакеты, смените порт или сервер.`},
