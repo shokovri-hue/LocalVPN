@@ -587,7 +587,7 @@ function drawUpd(){
     text = upd.error ? esc(upd.error) : busyNow() ? `Обновление ${v} готово. Установка закроет приложение и выключит VPN` : `Обновление ${v} готово`;
     btn = '<button type="button" id="upd-go">Установить</button>';
   } else if(st === 'installing'){
-    text = `Устанавливаю ${v}… Подтвердите установку в окне Android`;
+    text = `Устанавливаю ${v}… Приложение закроется — потом откройте его снова. Если Android спросит, нажмите «Обновить»`;
   } else if(st === 'error'){
     text = esc(upd.error || 'Не удалось обновиться');
     btn = '<button type="button" id="upd-retry">Повторить</button>';

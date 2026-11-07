@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Автообновление: приложение ставит новую версию само (Android попросит подтверждение) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Android 12+: обновлять себя без окна подтверждения (после первой установки обновления) -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- Нужно, чтобы показать список установленных приложений и пустить VPN только для одного из них -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
@@ -35,6 +37,13 @@
         <receiver
             android:name=".UpdateReceiver"
             android:exported="false" />
+        <receiver
+            android:name=".UpdatedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".ProxyService"

@@ -109,14 +109,23 @@ class MainActivity : ComponentActivity() {
             runOnUiThread { if (!isDestroyed) web.evaluateJavascript("window.onUpdate && window.onUpdate($json)", null) }
         }
 
+        // Фоновая проверка обновлений раз в 12 часов (по Wi-Fi)
+        UpdateWorker.schedule(applicationContext)
+
         // Список приложений собираем заранее, чтобы окно выбора открывалось сразу
         Executors.newSingleThreadExecutor().execute { installedAppsJson(applicationContext) }
     }
 
     override fun onResume() {
         super.onResume()
+        Updater.appVisible = true
         Updater.check(this, false)
         web.evaluateJavascript("window.onAppResume && window.onAppResume()", null)
+    }
+
+    override fun onPause() {
+        Updater.appVisible = false
+        super.onPause()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

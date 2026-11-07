@@ -1,5 +1,8 @@
 package app.localvpn
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -30,6 +33,8 @@ object Updater {
     @Volatile private var state = JSONObject().put("state", "none")
     @Volatile private var apkUrl = ""
     @Volatile private var listener: ((String) -> Unit)? = null
+    /** Открыто ли приложение на экране: из фона окно подтверждения показываем уведомлением. */
+    @Volatile var appVisible = false
 
     fun setListener(l: ((String) -> Unit)?) { listener = l }
     fun state(): String = state.toString()
@@ -48,7 +53,7 @@ object Updater {
         worker.execute {
             val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val now = System.currentTimeMillis()
-            val busy = state.optString("state") in setOf("downloading", "ready", "installing")
+            val busy = state.optString("state") in setOf("downloading", "installing")
             if (busy) { publish(state); return@execute }
             if (!force && now - prefs.getLong("lastCheck", 0) < CHECK_EVERY_MS && state.optString("state") != "available") return@execute
             try {
@@ -170,6 +175,55 @@ object Updater {
         return true
     }
 
+    /** Ждёт, пока выполнятся все поставленные задачи (проверка ставит скачивание следом за собой). */
+    private fun awaitIdle() {
+        repeat(3) { worker.submit(Runnable {}).get() }
+    }
+
+    private fun busyNow(context: Context): Boolean =
+        VpnController.running(context).isNotEmpty() || ProxyController.isRunning()
+
+    /**
+     * Фоновая проверка (раз в 12 часов по Wi-Fi, даже если приложение не открывали):
+     * берёт самую новую версию, скачивает и ставит, если VPN и прокси выключены.
+     */
+    fun backgroundRun(context: Context) {
+        val app = context.applicationContext
+        check(app, true)
+        awaitIdle()
+        if (state.optString("state") != "ready") return
+        val version = state.optString("version")
+        if (busyNow(app)) {
+            notify(app, 2, "Обновление LocalVPN $version скачано",
+                "Установится, когда выключите VPN или прокси. Можно установить сразу в приложении", null)
+            return
+        }
+        if (!app.packageManager.canRequestPackageInstalls()) {
+            notify(app, 2, "Доступно обновление LocalVPN $version",
+                "Откройте приложение и разрешите установку обновлений — дальше они будут ставиться сами", null)
+            return
+        }
+        install(app)
+        awaitIdle()
+    }
+
+    internal fun notify(context: Context, id: Int, title: String, text: String, action: Intent?) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(NotificationChannel("updates", "Обновления", NotificationManager.IMPORTANCE_DEFAULT))
+        val target = action ?: Intent(context, MainActivity::class.java)
+        val pending = PendingIntent.getActivity(context, id, target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = Notification.Builder(context, "updates")
+            .setSmallIcon(R.drawable.ic_notification_proxy)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setContentIntent(pending)
+            .setAutoCancel(true)
+            .build()
+        try { manager.notify(id, n) } catch (e: SecurityException) { /* уведомления запрещены */ }
+    }
+
     internal fun installFinished(ok: Boolean, message: String?) {
         if (ok) return // приложение сейчас перезапустится в новой версии
         val version = state.optString("version")
@@ -188,13 +242,25 @@ class UpdateReceiver : BroadcastReceiver() {
                     else intent.getParcelableExtra(Intent.EXTRA_INTENT)
                 if (confirm != null) {
                     confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    try { context.startActivity(confirm) } catch (e: Throwable) {
-                        Updater.installFinished(false, "Android не показал окно установки. Откройте приложение и нажмите «Установить»")
+                    val shown = Updater.appVisible && try { context.startActivity(confirm); true } catch (e: Throwable) { false }
+                    if (!shown) {
+                        Updater.notify(context, 3, "Обновление LocalVPN готово",
+                            "Нажмите, чтобы установить новую версию", confirm)
+                        Updater.installFinished(false, "Подтвердите установку в уведомлении")
                     }
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> Updater.installFinished(true, null)
             else -> Updater.installFinished(false, intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE))
         }
+    }
+}
+
+/** Приходит после установки новой версии поверх старой. */
+class UpdatedReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        Updater.notify(context, 4, "LocalVPN обновлён до ${Updater.versionName(context)}",
+            "Откройте приложение, чтобы снова включить VPN или прокси", null)
     }
 }
