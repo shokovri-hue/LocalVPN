@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Значок в строке уведомлений: схема «узел и связи», как на иконке LocalProxy -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M6.7,12H9M15,10.5L17.6,7.9M15,13.5L17.6,16.1M2.3,12a2.2,2.2 0,1 0,4.4 0a2.2,2.2 0,1 0,-4.4 0M17.3,6.5a2.2,2.2 0,1 0,4.4 0a2.2,2.2 0,1 0,-4.4 0M17.3,17.5a2.2,2.2 0,1 0,4.4 0a2.2,2.2 0,1 0,-4.4 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M10.6,8.5h2.8a1.6,1.6 0,0 1,1.6 1.6v3.8a1.6,1.6 0,0 1,-1.6 1.6h-2.8a1.6,1.6 0,0 1,-1.6 -1.6v-3.8a1.6,1.6 0,0 1,1.6 -1.6z" />
+</vector>

@@ -32,6 +32,7 @@ Android обновляет приложение, только если нова�
 - `app/src/main/java/app/localvpn/MainActivity.kt` — окно с интерфейсом и мост `window.Android` для страницы.
 - `app/src/main/java/app/localvpn/VpnController.kt` — включение и выключение туннеля, статистика, понятные тексты ошибок.
 - `app/src/main/java/app/localvpn/Warp.kt` — получение бесплатного конфига Cloudflare WARP.
+- `app/src/main/java/app/localvpn/ProxyController.kt`, `ProxyService.kt` — LocalProxy: WARP без VPN и прокси SOCKS5/HTTP на телефоне, уведомление, пока прокси работает.
 - `.github/workflows/build.yml` — автоматическая сборка APK.
 
 ## Требования

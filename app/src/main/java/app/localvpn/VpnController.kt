@@ -63,6 +63,7 @@ object VpnController {
                 if (Tunnel.isNameInvalid(name)) throw IllegalStateException("Название туннеля «$name» не подходит: только латиница, цифры и _ = + . -, до 15 символов")
                 val tunnel = synchronized(tunnels) { tunnels.getOrPut(name) { NamedTunnel(name) } }
                 if (on) {
+                    if (ProxyController.isRunning()) throw IllegalStateException("Сначала выключите прокси: прокси и VPN не работают одновременно")
                     val config = Config.parse(ByteArrayInputStream(configText.toByteArray(Charsets.UTF_8)))
                     if (config.peers.isEmpty()) throw IllegalStateException("Добавьте пир: без сервера туннелю некуда подключаться")
                     for (pkg in config.getInterface().includedApplications) {
@@ -119,7 +120,7 @@ object VpnController {
         }
 
     /** Понятный текст ошибки на русском. */
-    private fun humanError(e: Throwable): String = when (e) {
+    fun humanError(e: Throwable): String = when (e) {
         is BackendException -> when (e.reason) {
             BackendException.Reason.VPN_NOT_AUTHORIZED ->
                 "Нет разрешения на VPN. Включите туннель ещё раз и нажмите «ОК» в окне Android"

@@ -51,6 +51,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    // Android 13+: разрешение показывать уведомление «LocalProxy работает». Прокси запускается в любом случае.
+    private val notifyPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -151,6 +155,30 @@ class MainActivity : ComponentActivity() {
                 VpnController.apply(this@MainActivity, name, on, config, this@MainActivity::deliver)
             }
         }
+
+        /** LocalProxy: запуск и остановка. Ответ — window.onProxyState(up, error). */
+        @JavascriptInterface
+        fun setProxy(on: Boolean, config: String, options: String) {
+            runOnUiThread {
+                if (on && Build.VERSION.SDK_INT >= 33 &&
+                    checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    notifyPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+                ProxyController.apply(this@MainActivity, on, config, options) { up, error ->
+                    val js = "window.onProxyState && window.onProxyState(" + up + ", " +
+                        (if (error == null) "null" else JSONObject.quote(error)) + ")"
+                    runOnUiThread { if (!isDestroyed) web.evaluateJavascript(js, null) }
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun isProxyRunning(): Boolean = ProxyController.isRunning()
+
+        /** Адрес телефона в Wi-Fi сети — для раздачи прокси другим устройствам. */
+        @JavascriptInterface
+        fun getLanIp(): String = ProxyController.lanIp()
 
         /** Статистика работающего туннеля для индикатора «связь с сервером». */
         @JavascriptInterface
