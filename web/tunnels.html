@@ -324,12 +324,23 @@ pre.conf .s{color:var(--muted);font-weight:500}
 textarea.import{width:100%;box-sizing:border-box;min-height:220px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:14px;padding:14px;font:13px/1.6 var(--mono);resize:vertical}
 textarea.import:focus{outline:none;border-color:var(--accent)}
 
+.upd{position:fixed;z-index:15;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));
+  width:min(528px, calc(100% - 24px));box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 14px;
+  background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.16);font-size:13.5px;line-height:1.35}
+.upd-ico{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--on) 15%,transparent);color:var(--on);font-weight:800}
+.upd-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;font-weight:600}
+.upd-bar{display:block;height:5px;border-radius:99px;background:var(--field);overflow:hidden}
+.upd-bar span{display:block;height:100%;background:var(--on);transition:width .3s}
+.upd button{flex:none;border:0;border-radius:10px;padding:8px 12px;font:700 13px var(--display);cursor:pointer;background:var(--on);color:#fff}
+.upd .upd-x{background:transparent;color:var(--muted);padding:4px 8px;font-size:20px;line-height:1}
+.topmenu .ver{margin-left:auto;padding-left:10px;color:var(--muted);font-weight:500;font-size:12.5px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;text-align:center;line-height:1.4;bottom:calc(100px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;z-index:20}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 
 <div class="app" id="app"></div>
 <div class="toast" id="toast" hidden></div>
+<div class="upd" id="upd" role="status" hidden></div>
 <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Пример туннеля" hidden></div>
 
 <script>
@@ -478,6 +489,7 @@ function setTunnelOn(id, on){
 }
 // Ответ от Android: running — имена работающих туннелей, error — текст ошибки или null
 window.onTunnelState = (running, error) => {
+  setTimeout(tryAutoInstall, 0);
   running = Array.isArray(running) ? running : [];
   if(running.length && !anyOn()) upSince = Date.now();
   tunnels.forEach(x => { x.pending = false; x.on = running.includes(x.name); });
@@ -515,7 +527,75 @@ window.appBack = () => {
   const back = $('#back'); if(back){ back.click(); return true; }
   go({name:'list'}); return true;
 };
-window.onAppResume = () => { syncRunning(); if(['home','list','detail','proxy'].includes(view.name)) render(); };
+// ===== Автообновление (только в приложении) =====
+let upd = {state:'none'}, updHidden = false, updManual = false, updNeedPerm = false;
+const updTried = new Set();
+const fmtMb = b => b ? (b / 1048576).toLocaleString('ru-RU', {maximumFractionDigits: 0}) + ' МБ' : '';
+const busyNow = () => anyOn() || pmain.on || main.pending || pmain.pending;
+function tryAutoInstall(){
+  // Установка закрывает приложение, поэтому ставим сами только когда VPN и прокси выключены
+  if(!NATIVE || upd.state !== 'ready' || busyNow() || updTried.has(upd.version)) return;
+  updTried.add(upd.version);
+  installUpd();
+}
+function installUpd(){
+  if(!NATIVE) return;
+  const ok = NATIVE.installUpdate();
+  updNeedPerm = !ok; updHidden = false; drawUpd();
+}
+window.onUpdate = st => {
+  const prev = upd.state;
+  upd = st || {state:'none'};
+  if(upd.state !== prev && !(prev === 'downloading' && upd.state === 'downloading')) updHidden = false;
+  if(upd.state === 'none' && upd.checked && updManual){ updManual = false; toast(`У вас последняя версия ${NATIVE.getVersion()}`); }
+  if(upd.state === 'error' && updManual) updManual = false;
+  drawUpd();
+  tryAutoInstall();
+};
+function drawUpd(){
+  const el = $('#upd'); if(!el) return;
+  const st = upd.state, v = esc(upd.version || '');
+  let text = '', btn = '', bar = '';
+  if(updNeedPerm && st === 'ready'){
+    text = 'Разрешите LocalVPN устанавливать обновления — это нужно один раз';
+    btn = '<button type="button" id="upd-perm">Разрешить</button>';
+  } else if(st === 'available'){
+    text = `Доступна версия ${v}${upd.size ? ' · ' + fmtMb(upd.size) : ''}`;
+    btn = '<button type="button" id="upd-dl">Скачать</button>';
+  } else if(st === 'downloading'){
+    text = `Скачиваю обновление ${v}… ${upd.progress || 0}%`;
+    bar = `<span class="upd-bar"><span style="width:${upd.progress || 0}%"></span></span>`;
+  } else if(st === 'ready'){
+    text = upd.error ? esc(upd.error) : busyNow() ? `Обновление ${v} готово. Установка закроет приложение и выключит VPN` : `Обновление ${v} готово`;
+    btn = '<button type="button" id="upd-go">Установить</button>';
+  } else if(st === 'installing'){
+    text = `Устанавливаю ${v}… Подтвердите установку в окне Android`;
+  } else if(st === 'error'){
+    text = esc(upd.error || 'Не удалось обновиться');
+    btn = '<button type="button" id="upd-retry">Повторить</button>';
+  }
+  el.hidden = !text || updHidden;
+  if(el.hidden) return;
+  el.innerHTML = `<span class="upd-ico" aria-hidden="true">↻</span><span class="upd-text">${text}${bar}</span>${btn}
+    ${st === 'installing' ? '' : '<button type="button" class="upd-x" id="upd-x" aria-label="Скрыть">×</button>'}`;
+  const on = (id, f) => { const b = document.getElementById(id); if(b) b.onclick = f; };
+  on('upd-dl', () => NATIVE.downloadUpdate());
+  on('upd-go', installUpd);
+  on('upd-perm', () => NATIVE.openInstallSettings());
+  on('upd-retry', () => { updManual = true; if(upd.version) NATIVE.downloadUpdate(); else NATIVE.checkUpdate(true); });
+  on('upd-x', () => { updHidden = true; drawUpd(); });
+}
+function checkUpdatesNow(){
+  if(!NATIVE || typeof NATIVE.checkUpdate !== 'function'){ toast('Обновления проверяются в приложении LocalVPN на Android'); return; }
+  updManual = true; updHidden = false;
+  toast('Проверяю обновления…');
+  NATIVE.checkUpdate(true);
+}
+const versionLabel = () => { try{ return NATIVE && NATIVE.getVersion ? ' · ' + NATIVE.getVersion() : ''; }catch(e){ return ''; } };
+
+window.onAppResume = () => {
+  if(updNeedPerm && upd.state === 'ready'){ updNeedPerm = false; installUpd(); } // вернулись из настроек разрешения
+  syncRunning(); if(['home','list','detail','proxy'].includes(view.name)) render(); };
 
 // ===== Маскировка AmneziaWG =====
 const AWG_JUNK = {jc:'4', jmin:'40', jmax:'70'};           // «мусорные пакеты»: работают и с обычными серверами
@@ -588,6 +668,7 @@ const ICON = {
   new:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M3 12h18"/></svg>',
   more:'<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
   pin:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>',
+  refresh:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 21v-5h-5"/></svg>',
   help:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.4"/><circle cx="12" cy="17" r=".6" fill="currentColor"/></svg>',
   cloud:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.3 9.6 4.2 4.2 0 0 0 7 18z"/></svg>',
   file:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H6v18h12V7l-4-4z"/><path d="M14 3v4h4"/></svg>',
@@ -828,6 +909,7 @@ function setPmainOn(on){
 }
 // Ответ Android-части: up — запущен ли прокси, error — текст ошибки
 window.onProxyState = (up, error) => {
+  setTimeout(tryAutoInstall, 0);
   if(up && !pmain.on) pupSince = Date.now();
   pmain.pending = false; pmain.on = !!up; render();
   if(error) toast(error); else toast(up ? 'Прокси запущен' : 'Прокси остановлен');
@@ -931,6 +1013,7 @@ function renderProxy(){
       <button class="iconbtn" id="more" aria-label="Ещё" aria-haspopup="true" aria-expanded="false">${ICON.more}</button>
       <div class="topmenu" id="topmenu" hidden>
         <button id="pm-faq">${ICON.help} FAQ: как создать туннель</button>
+        <button id="pm-upd">${ICON.refresh} Проверить обновления<span class="ver">${esc(versionLabel())}</span></button>
       </div>
     </header>
     <main class="home">
@@ -962,6 +1045,7 @@ function renderProxy(){
   more.onclick = e => { e.stopPropagation(); top.hidden = !top.hidden; more.setAttribute('aria-expanded', !top.hidden); };
   document.onclick = e => { if(!e.target.closest('#topmenu')){ top.hidden = true; more.setAttribute('aria-expanded','false'); } };
   $('#pm-faq').onclick = () => go({name:'proxy-faq'});
+  $('#pm-upd').onclick = () => { $('#topmenu').hidden = true; checkUpdatesNow(); };
 }
 
 function renderProxyEdit(){
@@ -1082,6 +1166,7 @@ function renderList(){
       <button class="iconbtn" id="more" aria-label="Ещё" aria-haspopup="true" aria-expanded="false">${ICON.more}</button>
       <div class="topmenu" id="topmenu" hidden>
         <button id="m-faq">${ICON.help} FAQ: как создать туннель</button>
+        <button id="m-upd">${ICON.refresh} Проверить обновления<span class="ver">${esc(versionLabel())}</span></button>
         <button id="m-ap">${ICON.pin} Адрес и порт</button>
       </div>
     </header>
@@ -1134,6 +1219,7 @@ function renderList(){
   more.onclick = e => { e.stopPropagation(); menu.hidden = true; top.hidden = !top.hidden; more.setAttribute('aria-expanded', !top.hidden); };
   document.onclick = e => { if(!e.target.closest('#menu')) menu.hidden = true; if(!e.target.closest('#topmenu')){ top.hidden = true; more.setAttribute('aria-expanded','false'); } };
   $('#m-faq').onclick = () => go({name:'faq'});
+  $('#m-upd').onclick = () => { $('#topmenu').hidden = true; checkUpdatesNow(); };
   $('#route-sw').onchange = e => {
     if(e.target.checked) openAppPicker(()=>{ e.target.checked = false; });
     else { route = {mode:'all', app:null}; saveRoute(); renderList(); toast('VPN для всего устройства'); reapplyRunning(); }
@@ -1756,4 +1842,5 @@ DNS = 1.1.1.1"></textarea>
 
 syncRunning();
 render();
+try{ if(NATIVE && typeof NATIVE.getUpdateState === 'function') window.onUpdate(JSON.parse(NATIVE.getUpdateState())); }catch(e){}
 </script>

@@ -104,12 +104,18 @@ class MainActivity : ComponentActivity() {
             }
         })
 
+        // Автообновление: состояние сразу передаём странице
+        Updater.setListener { json ->
+            runOnUiThread { if (!isDestroyed) web.evaluateJavascript("window.onUpdate && window.onUpdate($json)", null) }
+        }
+
         // Список приложений собираем заранее, чтобы окно выбора открывалось сразу
         Executors.newSingleThreadExecutor().execute { installedAppsJson(applicationContext) }
     }
 
     override fun onResume() {
         super.onResume()
+        Updater.check(this, false)
         web.evaluateJavascript("window.onAppResume && window.onAppResume()", null)
     }
 
@@ -119,6 +125,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        Updater.setListener(null)
         web.destroy()
         super.onDestroy()
     }
@@ -183,6 +190,35 @@ class MainActivity : ComponentActivity() {
         /** Адрес телефона в Wi-Fi сети — для раздачи прокси другим устройствам. */
         @JavascriptInterface
         fun getLanIp(): String = ProxyController.lanIp()
+
+        // ===== Автообновление =====
+        @JavascriptInterface
+        fun getVersion(): String = Updater.versionName(this@MainActivity)
+
+        @JavascriptInterface
+        fun getUpdateState(): String = Updater.state()
+
+        @JavascriptInterface
+        fun checkUpdate(force: Boolean) = Updater.check(this@MainActivity, force)
+
+        @JavascriptInterface
+        fun downloadUpdate() = Updater.download(this@MainActivity)
+
+        /** false — нужно разрешение «Установка из этого источника» (страница предложит его выдать). */
+        @JavascriptInterface
+        fun installUpdate(): Boolean = Updater.install(this@MainActivity)
+
+        @JavascriptInterface
+        fun openInstallSettings() {
+            runOnUiThread {
+                try {
+                    startActivity(
+                        Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:$packageName"))
+                    )
+                } catch (e: Exception) {
+                }
+            }
+        }
 
         /** Статистика работающего туннеля для индикатора «связь с сервером». */
         @JavascriptInterface

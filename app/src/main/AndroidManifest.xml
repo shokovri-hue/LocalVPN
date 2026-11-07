@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Автообновление: приложение ставит новую версию само (Android попросит подтверждение) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Нужно, чтобы показать список установленных приложений и пустить VPN только для одного из них -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
@@ -30,6 +32,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <receiver
+            android:name=".UpdateReceiver"
+            android:exported="false" />
+
         <service
             android:name=".ProxyService"
             android:exported="false"
