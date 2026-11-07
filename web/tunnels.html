@@ -140,6 +140,7 @@ main{flex:1;padding-block:4px 120px;padding-left:max(16px,env(safe-area-inset-le
 .danger:hover{background:var(--field)}
 .hero{position:relative;top:auto;justify-content:center;padding-block:32px 0}
 .hero #more{position:absolute;top:14px;right:max(12px,env(safe-area-inset-right,0px))}
+.hero #to-home{position:absolute;top:14px;left:max(12px,env(safe-area-inset-left,0px))}
 .power{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;min-width:0}
 .power-btn{width:min(200px,54vw);height:min(200px,54vw);border-radius:50%;cursor:pointer;display:grid;place-items:center;border:0;
   background:var(--brand);box-shadow:0 14px 34px color-mix(in srgb,var(--brand) 38%,transparent);
@@ -217,6 +218,29 @@ main.home .empty{padding:24px 20px 40px}
 .sv-label{font:600 11px var(--display);fill:var(--muted)}
 .sv-val{font:12px var(--mono);fill:var(--fg)}
 .sv-val.sv-long{font-size:10.4px}
+main.start{min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:28px;text-align:center;padding-block:48px 40px}
+.start-brand{display:flex;flex-direction:column;align-items:center;gap:12px}
+.start-icon{width:112px;height:112px;border-radius:30px;background:var(--brand);display:grid;place-items:center;
+  box-shadow:0 18px 40px color-mix(in srgb,var(--brand) 35%,transparent)}
+.start-icon .shield{fill:#fff}
+.start-icon .check{stroke:var(--brand)}
+.start-title{margin:8px 0 0;font-size:34px;font-weight:800;letter-spacing:-.02em}
+.start-tag{margin:0;max-width:30ch;color:var(--muted);font-size:15px;line-height:1.5;text-wrap:balance}
+.start-status{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:99px;font-weight:700;font-size:14px;
+  background:var(--surface);border:1px solid var(--line);color:var(--muted)}
+.start-status .dot{width:9px;height:9px;border-radius:50%;background:var(--line)}
+.start-status.on{color:var(--on);border-color:color-mix(in srgb,var(--on) 40%,transparent)}
+.start-status.on .dot{background:var(--on);box-shadow:0 0 0 4px color-mix(in srgb,var(--on) 20%,transparent)}
+.start-status.busy .dot{background:var(--on);animation:pulse 1.2s ease-in-out infinite}
+.start-actions{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(340px,100%)}
+.start-open{width:100%;border:0;border-radius:16px;padding:17px;cursor:pointer;background:var(--brand);color:#fff;
+  font:800 17px var(--display);box-shadow:0 10px 24px color-mix(in srgb,var(--brand) 30%,transparent);transition:transform .12s}
+.start-open:hover{transform:translateY(-1px)}
+.start-open:active{transform:scale(.98)}
+.start-link{display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;color:var(--muted);font:600 14.5px var(--display);
+  padding:10px 12px;border-radius:10px;cursor:pointer}
+.start-link:hover{color:var(--fg);background:var(--field)}
 .keyrow{display:flex;align-items:center;gap:8px;margin-top:10px;width:min(340px,100%);padding:8px 8px 8px 14px;
   background:var(--surface);border:1px solid var(--line);border-radius:12px;box-sizing:border-box}
 .keyrow label{font-size:13px;font-weight:700;color:var(--muted)}
@@ -458,11 +482,12 @@ window.appBack = () => {
   if(!$('#lightbox').hidden){ closeLightbox(); return true; }
   const open = ['#menu','#topmenu'].map(s=>$(s)).find(m=>m && !m.hidden);
   if(open){ open.hidden = true; return true; }
-  if(view.name === 'list') return false;
+  if(view.name === 'home') return false;
+  if(view.name === 'list'){ go({name:'home'}); return true; }
   const back = $('#back'); if(back){ back.click(); return true; }
   go({name:'list'}); return true;
 };
-window.onAppResume = () => { syncRunning(); if(view.name==='list' || view.name==='detail') render(); };
+window.onAppResume = () => { syncRunning(); if(['home','list','detail'].includes(view.name)) render(); };
 
 // ===== Маскировка AmneziaWG =====
 const AWG_JUNK = {jc:'4', jmin:'40', jmax:'70'};           // «мусорные пакеты»: работают и с обычными серверами
@@ -519,7 +544,7 @@ function orderedApps(){
 }
 function saveRoute(){ try{ localStorage.setItem('tunnels.route', JSON.stringify(route)); }catch(e){} }
 
-let view = {name:'list'};
+let view = {name:'home'};
 function go(v){ view = v; render(); window.scrollTo(0,0); }
 
 function toast(msg){
@@ -543,7 +568,8 @@ const ICON = {
 // ---------- экраны ----------
 function render(){
   setTimeout(watchNet, 0);
-  if(view.name==='list') renderList();
+  if(view.name==='home') renderHome();
+  else if(view.name==='list') renderList();
   else if(view.name==='edit') renderEdit();
   else if(view.name==='detail') renderDetail();
   else if(view.name==='import') renderImport();
@@ -650,9 +676,35 @@ function watchNet(){
   } else if(!anyOn()) upSince = 0;
 }
 
+function renderHome(){
+  const on = anyOn(), busy = main.pending || tunnels.some(t => t.pending);
+  const status = busy ? 'Подключение…' : on ? 'VPN включён' : 'VPN выключен';
+  app.innerHTML = `
+    <main class="start">
+      <div class="start-brand">
+        <div class="start-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="64" height="64">
+            <path class="shield" d="M12 2.5L20.5 5.7V12C20.5 16.9 16.9 21 12 21.8C7.1 21 3.5 16.9 3.5 12V5.7Z"/>
+            <path class="check" d="M8.5 12.2L11 14.7L15.8 9.6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h1 class="start-title">LocalVPN</h1>
+        <p class="start-tag">VPN с маскировкой трафика: открывает заблокированные сайты и приложения</p>
+      </div>
+      <div class="start-status ${busy ? 'busy' : on ? 'on' : 'off'}" role="status"><span class="dot"></span>${status}</div>
+      <div class="start-actions">
+        <button type="button" class="start-open" id="start-open">Открыть</button>
+        <button type="button" class="start-link" id="start-faq">${ICON.help} Как это работает</button>
+      </div>
+    </main>`;
+  $('#start-open').onclick = () => go({name:'list'});
+  $('#start-faq').onclick = () => go({name:'faq', from:'home'});
+}
+
 function renderList(){
   app.innerHTML = `
     <header class="hero">
+      <button class="iconbtn" id="to-home" aria-label="На стартовый экран">${ICON.back}</button>
       ${powerHtml()}
       <button class="iconbtn" id="more" aria-label="Ещё" aria-haspopup="true" aria-expanded="false">${ICON.more}</button>
       <div class="topmenu" id="topmenu" hidden>
@@ -695,6 +747,7 @@ function renderList(){
     r.querySelector('input').addEventListener('change', e=> setTunnelOn(id, e.target.checked)); // одновременно активен только один
   });
   $('#power').onclick = e => { e.stopPropagation(); setMainOn(!main.on); };
+  $('#to-home').onclick = () => go({name:'home'});
   $('#main-gen').onclick = e => {
     e.stopPropagation();
     if(main.priv && !keyBusy){
@@ -1251,7 +1304,7 @@ function renderFaq(){
       </div>
       <button type="button" class="addpeer" id="faq-new">${ICON.new} Создать туннель</button>
     </main>`;
-  $('#back').onclick = () => go({name:'list'});
+  $('#back').onclick = () => go({name: view.from === 'home' ? 'home' : 'list'});
   $('#faq-new').onclick = () => go({name:'edit', id:null});
   app.querySelectorAll('.frame').forEach(f=> f.onclick = () => openLightbox(+f.dataset.ex, f));
 }
