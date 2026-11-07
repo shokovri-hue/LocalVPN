@@ -219,13 +219,16 @@ main.home .empty{padding:24px 20px 40px}
 .sv-val{font:12px var(--mono);fill:var(--fg)}
 .sv-val.sv-long{font-size:10.4px}
 main.start{min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:28px;text-align:center;padding-block:48px 40px}
+  gap:18px;text-align:center;padding-block:48px 40px}
 .start-brand{display:flex;flex-direction:column;align-items:center;gap:12px}
-.start-icon{width:112px;height:112px;border-radius:30px;background:var(--brand);display:grid;place-items:center;
-  box-shadow:0 18px 40px color-mix(in srgb,var(--brand) 35%,transparent)}
+.start-icon{width:128px;height:128px;border-radius:34px;background:var(--brand);display:grid;place-items:center;border:0;padding:0;cursor:pointer;
+  box-shadow:0 18px 40px color-mix(in srgb,var(--brand) 35%,transparent);transition:transform .12s,box-shadow .2s}
+.start-icon svg{width:88px;height:88px}
+.start-icon:hover{transform:translateY(-2px);box-shadow:0 22px 46px color-mix(in srgb,var(--brand) 42%,transparent)}
+.start-icon:active{transform:scale(.95)}
 .start-icon .shield{fill:#fff}
 .start-icon .check{stroke:var(--brand)}
-.start-title{margin:8px 0 0;font-size:34px;font-weight:800;letter-spacing:-.02em}
+.start-title{margin:0;font-size:34px;font-weight:800;letter-spacing:-.02em}
 .start-tag{margin:0;max-width:30ch;color:var(--muted);font-size:15px;line-height:1.5;text-wrap:balance}
 .start-status{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:99px;font-weight:700;font-size:14px;
   background:var(--surface);border:1px solid var(--line);color:var(--muted)}
@@ -677,28 +680,17 @@ function watchNet(){
 }
 
 function renderHome(){
-  const on = anyOn(), busy = main.pending || tunnels.some(t => t.pending);
-  const status = busy ? 'Подключение…' : on ? 'VPN включён' : 'VPN выключен';
   app.innerHTML = `
     <main class="start">
-      <div class="start-brand">
-        <div class="start-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="64" height="64">
-            <path class="shield" d="M12 2.5L20.5 5.7V12C20.5 16.9 16.9 21 12 21.8C7.1 21 3.5 16.9 3.5 12V5.7Z"/>
-            <path class="check" d="M8.5 12.2L11 14.7L15.8 9.6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <h1 class="start-title">LocalVPN</h1>
-        <p class="start-tag">VPN с маскировкой трафика: открывает заблокированные сайты и приложения</p>
-      </div>
-      <div class="start-status ${busy ? 'busy' : on ? 'on' : 'off'}" role="status"><span class="dot"></span>${status}</div>
-      <div class="start-actions">
-        <button type="button" class="start-open" id="start-open">Открыть</button>
-        <button type="button" class="start-link" id="start-faq">${ICON.help} Как это работает</button>
-      </div>
+      <button type="button" class="start-icon" id="start-open" aria-label="Открыть LocalVPN">
+        <svg viewBox="0 0 24 24" width="64" height="64" aria-hidden="true">
+          <path class="shield" d="M12 2.5L20.5 5.7V12C20.5 16.9 16.9 21 12 21.8C7.1 21 3.5 16.9 3.5 12V5.7Z"/>
+          <path class="check" d="M8.5 12.2L11 14.7L15.8 9.6" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <h1 class="start-title">LocalVPN</h1>
     </main>`;
   $('#start-open').onclick = () => go({name:'list'});
-  $('#start-faq').onclick = () => go({name:'faq', from:'home'});
 }
 
 function renderList(){
