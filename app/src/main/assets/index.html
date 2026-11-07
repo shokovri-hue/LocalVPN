@@ -233,8 +233,9 @@ main.home .empty{padding:24px 20px 40px}
 .sv-label{font:600 11px var(--display);fill:var(--muted)}
 .sv-val{font:12px var(--mono);fill:var(--fg)}
 .sv-val.sv-long{font-size:10.4px}
-main.start{min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:18px;text-align:center;padding-block:48px 40px}
+main.start{min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
+  gap:18px;text-align:center;padding-block:48px 40px;padding-left:max(28px,env(safe-area-inset-left,0px))}
+.start-app{display:flex;flex-direction:column;align-items:center;gap:18px} /* подпись ровно под иконкой */
 .start-brand{display:flex;flex-direction:column;align-items:center;gap:12px}
 .start-icon{width:128px;height:128px;border-radius:34px;background:var(--brand);display:grid;place-items:center;border:0;padding:0;cursor:pointer;
   box-shadow:0 18px 40px color-mix(in srgb,var(--brand) 35%,transparent);transition:transform .12s,box-shadow .2s}
@@ -700,6 +701,7 @@ function watchNet(){
 function renderHome(){
   app.innerHTML = `
     <main class="start">
+      <div class="start-app">
       <button type="button" class="start-icon" id="start-open" aria-label="Открыть LocalVPN">
         <svg viewBox="0 0 24 24" width="64" height="64" aria-hidden="true">
           <path class="shield" d="M12 2.5L20.5 5.7V12C20.5 16.9 16.9 21 12 21.8C7.1 21 3.5 16.9 3.5 12V5.7Z"/>
@@ -707,6 +709,7 @@ function renderHome(){
         </svg>
       </button>
       <h1 class="start-title">LocalVPN</h1>
+      </div>
     </main>`;
   $('#start-open').onclick = () => go({name:'list'});
 }
