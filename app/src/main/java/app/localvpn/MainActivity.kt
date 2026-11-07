@@ -176,6 +176,10 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun isProxyRunning(): Boolean = ProxyController.isRunning()
 
+        /** Статистика прокси для строки «связь с сервером». */
+        @JavascriptInterface
+        fun getProxyStats(): String = ProxyController.stats(this@MainActivity)
+
         /** Адрес телефона в Wi-Fi сети — для раздачи прокси другим устройствам. */
         @JavascriptInterface
         fun getLanIp(): String = ProxyController.lanIp()

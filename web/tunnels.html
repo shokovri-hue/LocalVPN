@@ -695,29 +695,46 @@ function fmtBytes(b){
   do { b /= 1024; i++; } while(b >= 1024 && i < u.length-1);
   return b.toLocaleString('ru-RU', {maximumFractionDigits: b < 10 ? 1 : 0}) + ' ' + u[i];
 }
-function netStatus(){
-  if(!NATIVE || !anyOn()) return null;
-  let st; try{ st = JSON.parse(NATIVE.getStats()); }catch(e){ return null; }
+// Разбирает статистику движка: since — когда включили (чтобы первые секунды писать «жду ответа»)
+function statusFrom(json, since){
+  let st; try{ st = JSON.parse(json); }catch(e){ return null; }
   if(!st || st.error || st.name === undefined) return null;
   const age = st.handshake ? (st.now - st.handshake) / 1000 : Infinity;
   const traffic = `↓ ${fmtBytes(st.rx)} · ↑ ${fmtBytes(st.tx)}`;
   if(age < 180) return {cls:'ok', text:`Связь с сервером есть · ${traffic}`};
-  const waited = (Date.now() - upSince) / 1000;
+  const waited = (Date.now() - since) / 1000;
   if(!st.handshake && waited < 15) return {cls:'wait', text:'Жду ответа от сервера…'};
   return {cls:'bad', text:'Сервер не отвечает. Подключение, скорее всего, блокируется — см. FAQ'};
 }
-function updateNet(){
-  const el = document.getElementById('power-net'); if(!el) return;
-  const s = netStatus();
+function netStatus(){
+  if(!NATIVE || !anyOn()) return null;
+  return statusFrom(NATIVE.getStats(), upSince);
+}
+let pupSince = 0;
+function proxyNetStatus(){
+  if(!NATIVE || !pmain.on || typeof NATIVE.getProxyStats !== 'function') return null;
+  return statusFrom(NATIVE.getProxyStats(), pupSince);
+}
+function paintNet(id, s){
+  const el = document.getElementById(id); if(!el) return;
   el.hidden = !s; if(!s) return;
   el.className = 'power-net ' + s.cls; el.textContent = s.text;
+}
+function updateNet(){
+  if(view.name === 'proxy') paintNet('proxy-net', proxyNetStatus());
+  else paintNet('power-net', netStatus());
 }
 function watchNet(){
   clearInterval(netTimer); netTimer = null;
   if(NATIVE && view.name === 'list' && anyOn()){
     if(!upSince) upSince = Date.now();
     updateNet(); netTimer = setInterval(updateNet, 2000);
-  } else if(!anyOn()) upSince = 0;
+  } else if(NATIVE && view.name === 'proxy' && pmain.on){
+    if(!pupSince) pupSince = Date.now();
+    updateNet(); netTimer = setInterval(updateNet, 2000);
+  }
+  if(!anyOn()) upSince = 0;
+  if(!pmain.on) pupSince = 0;
 }
 
 function renderHome(){
@@ -806,6 +823,7 @@ function setPmainOn(on){
 }
 // Ответ Android-части: up — запущен ли прокси, error — текст ошибки
 window.onProxyState = (up, error) => {
+  if(up && !pmain.on) pupSince = Date.now();
   pmain.pending = false; pmain.on = !!up; render();
   if(error) toast(error); else toast(up ? 'Прокси запущен' : 'Прокси остановлен');
 };
@@ -889,6 +907,7 @@ function proxyPowerHtml(){
       </button>
       <div class="power-label">${label}</div>
       <div class="power-sub">${sub}</div>
+      <div class="power-net" id="proxy-net" role="status" hidden></div>
       <div class="keyrow">
         <label for="pkey">Ключ</label>
         <input id="pkey" readonly value="${hasKey ? '••••••••••••' : ''}" placeholder="не создан">
@@ -1018,6 +1037,7 @@ function renderProxyEdit(){
 
 const PROXY_FAQ = [
   {q:'Как работает большая кнопка LocalProxy?', ex:'SOCKS5 127.0.0.1:1080', a:`Она запускает прокси-сервер прямо на телефоне. Трафик через него идёт в бесплатный Cloudflare WARP с той же маскировкой, что и у VPN. Один раз нажмите <b>«Сгенерировать»</b>, чтобы получить личный ключ, затем большую кнопку. Адрес прокси появится под кнопкой — укажите его в приложении, где есть настройка прокси. Остальные приложения работают напрямую.`},
+  {q:'Что значит строка под большой кнопкой?', ex:'Связь с сервером есть · ↓ 3,2 МБ · ↑ 410 КБ', a:`Проверка, что прокси действительно выходит в интернет через WARP. «Связь с сервером есть» — всё работает, рядом видно, сколько данных прошло. «Сервер не отвечает» — прокси на телефоне запущен, но WARP не отвечает: обычно это блокировка. Проверьте, работает ли сейчас VPN в LocalVPN, или попробуйте позже.`},
   {q:'Как указать прокси в Telegram?', ex:'127.0.0.1 · порт 1080', a:`Откройте Telegram → Настройки → Данные и память → Настройки прокси → Добавить прокси. Выберите <b>SOCKS5</b>, сервер <code>127.0.0.1</code>, порт <code>1080</code>, логин и пароль оставьте пустыми и сохраните.`},
   {q:'Что значит «Раздать по Wi-Fi»?', ex:'192.168.1.5:1080', a:`Телефон становится «точкой выхода» для других устройств в той же Wi-Fi сети, например компьютера. На компьютере укажите в настройках прокси адрес телефона, порт, логин и пароль из LocalProxy. Логин и пароль нужны, чтобы прокси не мог использовать кто угодно в этой сети.`},
   {q:'Чем прокси отличается от VPN?', ex:null, a:`VPN шифрует и направляет через сервер весь трафик телефона. Прокси проще: это сервер-посредник, через который идут запросы. Он меняет ваш адрес для сайтов, но сам трафик не шифрует, если сайт и так не открыт по HTTPS. Прокси удобен, когда нужен другой адрес для отдельного сервиса, например Telegram.`},

@@ -87,6 +87,28 @@ object ProxyController {
         }
     }
 
+    /** Статистика прокси: получено и отправлено байт, когда WARP последний раз ответил. */
+    fun stats(context: Context): String {
+        val result = JSONObject()
+        try {
+            if (!isRunning()) return result.toString()
+            val stats = backend(context).getStatistics(tunnel)
+            var handshake = 0L
+            for (key in stats.peers()) {
+                val peer = stats.peer(key) ?: continue
+                if (peer.latestHandshakeEpochMillis() > handshake) handshake = peer.latestHandshakeEpochMillis()
+            }
+            result.put("name", NAME)
+            result.put("rx", stats.totalRx())
+            result.put("tx", stats.totalTx())
+            result.put("handshake", handshake)
+            result.put("now", System.currentTimeMillis())
+        } catch (e: Throwable) {
+            result.put("error", e.message ?: e.javaClass.simpleName)
+        }
+        return result.toString()
+    }
+
     /** IPv4-адрес телефона в Wi-Fi сети (или в точке доступа), например 192.168.1.5. */
     fun lanIp(): String {
         return try {
