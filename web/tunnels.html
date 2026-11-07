@@ -451,7 +451,7 @@ function mainConf(){
     peers:[{pub:main.peerPub || MAIN_PRESET.peerPub, psk:'', endpoint:MAIN_PRESET.endpoint, allowed:MAIN_PRESET.allowed, keepalive:MAIN_PRESET.keepalive}]});
 }
 function setMainOn(on){
-  if(on && !main.priv){ toast('Сначала нажмите «Сгенерировать», чтобы получить ключ'); return; }
+  if(on && !main.priv){ autoMain = true; getWarp('main'); return; } // ключ создаётся сам, затем VPN включится
   if(!NATIVE){
     main.on = on; tunnels.forEach(x => x.on = false); save(); render();
     toast(on ? 'VPN включён' : 'VPN выключен'); return;
@@ -609,10 +609,11 @@ function render(){
 }
 
 function powerHtml(){
-  const on = main.on, busy = main.pending, hasKey = !!main.priv;
+  const on = main.on, busy = main.pending || keyBusy, hasKey = !!main.priv;
   const state = busy ? 'busy' : on ? 'on' : 'off';
-  const label = !hasKey ? 'Нужен ключ' : busy ? 'Подключение…' : on ? 'VPN включён' : 'VPN выключен';
-  const sub = !hasKey ? 'Нажмите «Сгенерировать» ниже — это нужно один раз'
+  const label = keyBusy ? 'Получаю ключ…' : busy ? 'Подключение…' : on ? 'VPN включён' : 'VPN выключен';
+  const sub = keyBusy ? 'Один раз при первом включении — несколько секунд'
+    : !hasKey ? 'Нажмите, чтобы включить. Ключ создастся автоматически'
     : on ? `Защищено${route.mode==='app' ? ' · только ' + esc(route.app.n) : ''}`
     : busy ? 'Подождите несколько секунд' : 'Нажмите, чтобы включить';
   return `<div class="power ${state}">
@@ -628,19 +629,19 @@ function powerHtml(){
       <div class="power-net" id="power-net" role="status" hidden></div>
       <div class="keyrow">
         <label for="main-key">Ключ</label>
-        <input id="main-key" readonly value="${hasKey ? '••••••••••••' : ''}" placeholder="не создан">
+        <input id="main-key" readonly value="${hasKey ? '••••••••••••' : ''}" placeholder="создастся сам">
         <button type="button" class="small" id="main-gen" ${busy || keyBusy ? 'disabled' : ''}>${keyBusy ? 'Получаю…' : 'Сгенерировать'}</button>
       </div>
     </div>`;
 }
 
 // ===== Бесплатный Cloudflare WARP =====
-let warpBusy = false, warpPriv = null, warpFor = 'list', keyBusy = false, pkeyBusy = false;
+let warpBusy = false, warpPriv = null, warpFor = 'list', keyBusy = false, pkeyBusy = false, autoMain = false, autoProxy = false;
 function getWarp(target){
   warpFor = ['main','proxy'].includes(target) ? target : 'list';
-  if(!NATIVE){ toast('Ключ можно получить только в приложении LocalVPN на Android'); return; }
+  if(!NATIVE){ autoMain = autoProxy = false; toast('Ключ можно получить только в приложении LocalVPN на Android'); return; }
   if(warpBusy) return;
-  if(anyOn()){ toast('Сначала выключите VPN: Cloudflare нужно ответить напрямую'); return; }
+  if(anyOn()){ autoMain = autoProxy = false; toast('Сначала выключите VPN: Cloudflare нужно ответить напрямую'); return; }
   warpBusy = true; warpPriv = genPrivate();
   if(warpFor === 'main'){ keyBusy = true; render(); }
   if(warpFor === 'proxy'){ pkeyBusy = true; render(); }
@@ -651,26 +652,30 @@ window.onWarpResult = (data, error) => {
   warpBusy = false;
   if(warpFor === 'proxy'){
     pkeyBusy = false;
+    const start = autoProxy; autoProxy = false;
     if(error || !data){
       render();
-      toast((error || 'Не удалось получить ключ') + '. Если Cloudflare заблокирован, включите на минуту другой VPN и нажмите «Сгенерировать» ещё раз');
+      toast((error || 'Не удалось получить ключ') + '. Если Cloudflare заблокирован, включите на минуту другой VPN и нажмите кнопку ещё раз');
       return;
     }
     pmain.priv = warpPriv; pmain.address = data.address4 ? data.address4 + '/32' : ''; pmain.peerPub = data.peerPublicKey || '';
     warpPriv = null; savePmain(); render();
-    toast('Ключ создан. Нажмите большую кнопку, чтобы запустить прокси');
+    if(start){ toast('Ключ создан, запускаю прокси…'); setPmainOn(true); }
+    else toast('Ключ создан. Нажмите большую кнопку, чтобы запустить прокси');
     return;
   }
   if(warpFor === 'main'){
     keyBusy = false;
+    const start = autoMain; autoMain = false;
     if(error || !data){
       render();
-      toast((error || 'Не удалось получить ключ') + '. Если Cloudflare заблокирован, включите на минуту другой VPN и нажмите «Сгенерировать» ещё раз');
+      toast((error || 'Не удалось получить ключ') + '. Если Cloudflare заблокирован, включите на минуту другой VPN и нажмите кнопку ещё раз');
       return;
     }
     main.priv = warpPriv; main.address = data.address4 ? data.address4 + '/32' : ''; main.peerPub = data.peerPublicKey || '';
     warpPriv = null; saveMain(); render();
-    toast('Ключ создан. Нажмите большую кнопку, чтобы включить VPN');
+    if(start){ toast('Ключ создан, включаю VPN…'); setMainOn(true); }
+    else toast('Ключ создан. Нажмите большую кнопку, чтобы включить VPN');
     return;
   }
   if(error || !data){ toast(error || 'Не удалось получить WARP'); return; }
@@ -812,7 +817,7 @@ function proxyOptions(){
 }
 const nativeProxy = () => NATIVE && typeof NATIVE.setProxy === 'function';
 function setPmainOn(on){
-  if(on && !pmain.priv){ toast('Сначала нажмите «Сгенерировать», чтобы получить ключ'); return; }
+  if(on && !pmain.priv){ autoProxy = true; getWarp('proxy'); return; } // ключ создаётся сам, затем прокси запустится
   if(NATIVE && !nativeProxy()){ toast('Запуск прокси появится в следующей версии приложения'); return; }
   if(!NATIVE){
     pmain.on = on; render();
@@ -895,10 +900,11 @@ function setProxyOn(id, on){
 }
 
 function proxyPowerHtml(){
-  const on = pmain.on, busy = pmain.pending, hasKey = !!pmain.priv;
+  const on = pmain.on, busy = pmain.pending || pkeyBusy, hasKey = !!pmain.priv;
   const state = busy ? 'busy' : on ? 'on' : 'off';
-  const label = !hasKey ? 'Нужен ключ' : busy ? 'Запуск…' : on ? 'Прокси включён' : 'Прокси выключен';
-  const sub = !hasKey ? 'Нажмите «Сгенерировать» ниже — это нужно один раз'
+  const label = pkeyBusy ? 'Получаю ключ…' : busy ? 'Запуск…' : on ? 'Прокси включён' : 'Прокси выключен';
+  const sub = pkeyBusy ? 'Один раз при первом запуске — несколько секунд'
+    : !hasKey ? 'Нажмите, чтобы запустить. Ключ создастся автоматически'
     : on ? 'Укажите адрес ниже в Telegram, браузере или на другом устройстве'
     : busy ? 'Подождите несколько секунд' : 'Нажмите, чтобы запустить прокси через WARP';
   return `<div class="power proxy ${state}">
@@ -910,7 +916,7 @@ function proxyPowerHtml(){
       <div class="power-net" id="proxy-net" role="status" hidden></div>
       <div class="keyrow">
         <label for="pkey">Ключ</label>
-        <input id="pkey" readonly value="${hasKey ? '••••••••••••' : ''}" placeholder="не создан">
+        <input id="pkey" readonly value="${hasKey ? '••••••••••••' : ''}" placeholder="создастся сам">
         <button type="button" class="small" id="pgen" ${busy || pkeyBusy ? 'disabled' : ''}>${pkeyBusy ? 'Получаю…' : 'Сгенерировать'}</button>
       </div>
       ${proxyAddrHtml()}
@@ -1036,7 +1042,7 @@ function renderProxyEdit(){
 }
 
 const PROXY_FAQ = [
-  {q:'Как работает большая кнопка LocalProxy?', ex:'SOCKS5 127.0.0.1:1080', a:`Она запускает прокси-сервер прямо на телефоне. Трафик через него идёт в бесплатный Cloudflare WARP с той же маскировкой, что и у VPN. Один раз нажмите <b>«Сгенерировать»</b>, чтобы получить личный ключ, затем большую кнопку. Адрес прокси появится под кнопкой — укажите его в приложении, где есть настройка прокси. Остальные приложения работают напрямую.`},
+  {q:'Как работает большая кнопка LocalProxy?', ex:'SOCKS5 127.0.0.1:1080', a:`Она запускает прокси-сервер прямо на телефоне. Трафик через него идёт в бесплатный Cloudflare WARP с той же маскировкой, что и у VPN. При первом запуске приложение само получит личный ключ — просто нажмите большую кнопку. Адрес прокси появится под кнопкой — укажите его в приложении, где есть настройка прокси. Остальные приложения работают напрямую.`},
   {q:'Что значит строка под большой кнопкой?', ex:'Связь с сервером есть · ↓ 3,2 МБ · ↑ 410 КБ', a:`Проверка, что прокси действительно выходит в интернет через WARP. «Связь с сервером есть» — всё работает, рядом видно, сколько данных прошло. «Сервер не отвечает» — прокси на телефоне запущен, но WARP не отвечает: обычно это блокировка. Проверьте, работает ли сейчас VPN в LocalVPN, или попробуйте позже.`},
   {q:'Как указать прокси в Telegram?', ex:'127.0.0.1 · порт 1080', a:`Откройте Telegram → Настройки → Данные и память → Настройки прокси → Добавить прокси. Выберите <b>SOCKS5</b>, сервер <code>127.0.0.1</code>, порт <code>1080</code>, логин и пароль оставьте пустыми и сохраните.`},
   {q:'Что значит «Раздать по Wi-Fi»?', ex:'192.168.1.5:1080', a:`Телефон становится «точкой выхода» для других устройств в той же Wi-Fi сети, например компьютера. На компьютере укажите в настройках прокси адрес телефона, порт, логин и пароль из LocalProxy. Логин и пароль нужны, чтобы прокси не мог использовать кто угодно в этой сети.`},
@@ -1580,7 +1586,7 @@ const FAQ = [
   {group:'Общее', items:[
     {q:'Что такое туннель?', ex:null, a:`Туннель — это одно сохранённое VPN-подключение. Он состоит из двух частей: <b>интерфейса</b> (настройки вашего устройства) и одного или нескольких <b>пиров</b> (серверов, к которым вы подключаетесь). Весь трафик между вами и пиром шифруется.`},
     {q:'Весь трафик или одно приложение?', ex:'IncludedApplications = org.telegram.messenger', a:`Бегунок внизу главного экрана, рядом с «+». Слева — <b>VPN для всего устройства</b>: через туннель идёт трафик всех приложений. Справа — <b>для одного приложения</b>: вы выбираете приложение, и через VPN идёт только его трафик, а остальные работают напрямую. Выбор записывается в конфиг строкой <code>IncludedApplications</code>. Её понимает официальное приложение WireGuard для Android; на компьютерах и iPhone эта строка не поддерживается.`},
-    {q:'Как работает большая кнопка?', ex:null, a:`Большая кнопка включает встроенный VPN с готовыми настройками: бесплатный сервер Cloudflare WARP, маскировка под DNS и мусорные пакеты. Настраивать ничего не нужно — один раз нажмите <b>«Сгенерировать»</b> под кнопкой: приложение создаст ваш личный ключ и зарегистрирует его. Перед этим выключите любой VPN. Если появилась ошибка, что Cloudflare не ответил, включите на минуту другой VPN (например, Proton) и нажмите «Сгенерировать» ещё раз. Туннели из списка работают отдельно и включаются своими переключателями.`},
+    {q:'Как работает большая кнопка?', ex:null, a:`Большая кнопка включает встроенный VPN с готовыми настройками: бесплатный сервер Cloudflare WARP, маскировка под DNS и мусорные пакеты. Настраивать ничего не нужно: при первом включении приложение само создаст ваш личный ключ, зарегистрирует его и включит VPN. Кнопка <b>«Сгенерировать»</b> нужна, только если ключ захочется заменить. Если появилась ошибка, что Cloudflare не ответил, включите на минуту другой VPN (например, Proton) и нажмите кнопку ещё раз. Туннели из списка работают отдельно и включаются своими переключателями.`},
     {q:'Бесплатный WARP от Cloudflare', ex:'Endpoint = 162.159.192.1:2408', a:`Пункт в меню «+». Приложение регистрирует бесплатный аккаунт Cloudflare WARP и само создаёт туннель <code>warp</code> с включёнными мусорными пакетами. Перед этим выключите VPN. WARP не переносит вас в другую страну, а скрывает трафик от провайдера и открывает заблокированные сайты. Если под кнопкой пишет «Сервер не отвечает», попробуйте в Endpoint другой порт: <code>500</code>, <code>1701</code>, <code>4500</code>, <code>878</code> или <code>894</code>.`},
     {q:'Маскировка AmneziaWG', ex:'Jc = 4, Jmin = 40, Jmax = 70', a:`Раздел «Дополнительно». Некоторые провайдеры узнают WireGuard по первым пакетам и обрывают соединение. <b>Мусорные пакеты</b> (Jc, Jmin, Jmax) отправляются перед подключением и сбивают такое распознавание; они работают с любым сервером. <b>Параметры сервера</b> (S1–S4, H1–H4, I1–I5) меняют сам вид трафика, но подходят только к серверу AmneziaWG, у которого такие же значения — берите их из его конфига, иначе подключение не заработает. <b>Маскировка под другой протокол</b> (QUIC, DNS, STUN) — эксперимент: перед подключением отправляется пакет, похожий на обычный трафик, чтобы провайдер принял всё соединение за него. Работает с любым сервером, но помогает не у всех провайдеров.`},
     {q:'Что значит строка под большой кнопкой?', ex:'Связь с сервером есть · ↓ 12 МБ · ↑ 1,4 МБ', a:`Это проверка, что VPN действительно работает. «Связь с сервером есть» — сервер отвечает, рядом видно, сколько данных прошло. «Сервер не отвечает» — туннель включён, но трафик никуда не идёт: обычно это блокировка, неверный ключ или Endpoint. Включите мусорные пакеты, смените порт или сервер.`},
