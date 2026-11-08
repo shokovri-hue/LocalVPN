@@ -984,7 +984,7 @@ function setProxyOn(id, on){
 function proxyPowerHtml(){
   const on = pmain.on, busy = pmain.pending || pkeyBusy, hasKey = !!pmain.priv;
   const state = busy ? 'busy' : on ? 'on' : 'off';
-  const label = pkeyBusy ? 'Получаю ключ…' : busy ? 'Запуск…' : on ? 'Прокси включён' : 'Proxy выключен';
+  const label = pkeyBusy ? 'Получаю ключ…' : busy ? 'Запуск…' : on ? 'Proxy включён' : 'Proxy выключен';
   const sub = pkeyBusy ? 'Один раз при первом запуске — несколько секунд'
     : !hasKey ? 'Нажмите, чтобы запустить. Ключ создастся автоматически'
     : on ? 'Укажите адрес ниже в Telegram, браузере или на другом устройстве'
