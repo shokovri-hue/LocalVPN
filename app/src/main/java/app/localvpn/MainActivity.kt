@@ -36,9 +36,17 @@ class MainActivity : ComponentActivity() {
     private val background = Executors.newSingleThreadExecutor()
     private var pendingName: String? = null
     private var pendingConfig: String? = null
+    private var pendingProxyTunnel: String? = null
 
     private val vpnPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val proxyCfg = pendingProxyTunnel
+            pendingProxyTunnel = null
+            if (proxyCfg != null) {
+                if (result.resultCode == RESULT_OK) ProxyTunnels.apply(this, true, proxyCfg, this@MainActivity::deliverProxyTunnel)
+                else deliverProxyTunnel(ProxyTunnels.running(), "Без разрешения Android не сможет включить прокси-туннель")
+                return@registerForActivityResult
+            }
             val name = pendingName
             val config = pendingConfig
             pendingName = null
@@ -109,6 +117,9 @@ class MainActivity : ComponentActivity() {
             runOnUiThread { if (!isDestroyed) web.evaluateJavascript("window.onUpdate && window.onUpdate($json)", null) }
         }
 
+        // Прокси-туннель могли выключить извне (другое VPN-приложение) — сообщаем странице
+        ProxyTunnels.setListener { id, error -> deliverProxyTunnel(id, error) }
+
         // Фоновая проверка обновлений раз в 12 часов (по Wi-Fi)
         UpdateWorker.schedule(applicationContext)
 
@@ -135,8 +146,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         Updater.setListener(null)
+        ProxyTunnels.setListener(null)
         web.destroy()
         super.onDestroy()
+    }
+
+    /** Передаёт странице, какой прокси-туннель включён (id или null). */
+    private fun deliverProxyTunnel(id: String?, error: String?) {
+        val js = "window.onProxyTunnelState && window.onProxyTunnelState(" +
+            (if (id == null) "null" else JSONObject.quote(id)) + ", " +
+            (if (error == null) "null" else JSONObject.quote(error)) + ")"
+        runOnUiThread { if (!isDestroyed) web.evaluateJavascript(js, null) }
     }
 
     /** Передаёт странице состояние туннелей. */
@@ -191,6 +211,28 @@ class MainActivity : ComponentActivity() {
 
         @JavascriptInterface
         fun isProxyRunning(): Boolean = ProxyController.isRunning()
+
+        /** Прокси-туннель на весь телефон: cfg — JSON {id, name, type, host, port, user, pass}. */
+        @JavascriptInterface
+        fun setProxyTunnel(on: Boolean, cfg: String) {
+            runOnUiThread {
+                if (on) {
+                    val ask = VpnService.prepare(this@MainActivity)
+                    if (ask != null) {
+                        pendingProxyTunnel = cfg
+                        vpnPermission.launch(ask)
+                        return@runOnUiThread
+                    }
+                }
+                ProxyTunnels.apply(this@MainActivity, on, cfg, this@MainActivity::deliverProxyTunnel)
+            }
+        }
+
+        @JavascriptInterface
+        fun getProxyTunnel(): String = ProxyTunnels.running() ?: ""
+
+        @JavascriptInterface
+        fun getProxyTunnelStats(): String = ProxyTunnels.stats()
 
         /** Статистика прокси для строки «связь с сервером». */
         @JavascriptInterface

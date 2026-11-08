@@ -61,6 +61,8 @@ kotlin {
 dependencies {
     // AmneziaWG: WireGuard с маскировкой трафика. Обычные WireGuard-конфиги тоже работают.
     implementation("com.zaneschepke:amneziawg-android:2.3.7")
+    // Движок hev-socks5-tunnel (входит в AmneziaWG): прокси-туннели на весь телефон
+    implementation("com.zaneschepke:hevtunnel:1.0.1")
     implementation("androidx.activity:activity-ktx:1.9.1")
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("androidx.work:work-runtime:2.9.1") // фоновая проверка обновлений

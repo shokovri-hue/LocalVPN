@@ -45,6 +45,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- Прокси-туннель: весь трафик телефона через SOCKS5-сервер пользователя -->
+        <service
+            android:name=".ProxyTunnelService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
         <service
             android:name=".ProxyService"
             android:exported="false"

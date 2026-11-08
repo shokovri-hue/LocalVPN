@@ -290,6 +290,7 @@ main.start{min-height:100%;box-sizing:border-box;display:flex;flex-direction:col
 .keyrow input::placeholder{color:var(--muted);letter-spacing:0;font-family:var(--display)}
 .keyrow input:focus{outline:none}
 .keyrow .small.confirm{background:var(--danger);border-color:var(--danger);color:#fff}
+.pt-traffic.bad{color:var(--danger)}
 .power-net{margin-top:4px;font-size:13px;font-weight:600;padding:5px 12px;border-radius:99px;max-width:34ch}
 .power-net.ok{color:var(--on);background:color-mix(in srgb,var(--on) 12%,transparent)}
 .power-net.wait{color:var(--muted);background:var(--field)}
@@ -532,6 +533,7 @@ function syncRunning(){
     main.on = running.includes(MAIN_NAME); main.pending = false;
   }catch(e){}
   try{ if(typeof NATIVE.isProxyRunning === 'function'){ pmain.on = !!NATIVE.isProxyRunning(); pmain.pending = false; } }catch(e){}
+  try{ if(typeof NATIVE.getProxyTunnel === 'function'){ const id = NATIVE.getProxyTunnel(); proxies.forEach(x => { x.on = x.id === id; x.pending = false; }); } }catch(e){}
 }
 // Кнопка «Назад» на телефоне. Возвращает true, если обработали сами.
 window.appBack = () => {
@@ -824,8 +826,17 @@ function paintNet(id, s){
   el.hidden = !s; if(!s) return;
   el.className = 'power-net ' + s.cls; el.textContent = s.text;
 }
+function updateProxyTunnelTraffic(){
+  const el = document.getElementById('pt-traffic');
+  if(!el || !NATIVE || typeof NATIVE.getProxyTunnelStats !== 'function') return;
+  let st; try{ st = JSON.parse(NATIVE.getProxyTunnelStats()); }catch(e){ return; }
+  if(st.rx === undefined) return;
+  const quiet = !st.rx && (Date.now() - ptSince) > 15000;
+  el.textContent = quiet ? ' · сервер не отвечает' : ` · ↓ ${fmtBytes(st.rx)} · ↑ ${fmtBytes(st.tx)}`;
+  el.classList.toggle('bad', quiet);
+}
 function updateNet(){
-  if(view.name === 'proxy') paintNet('proxy-net', proxyNetStatus());
+  if(view.name === 'proxy'){ paintNet('proxy-net', proxyNetStatus()); updateProxyTunnelTraffic(); }
   else paintNet('power-net', netStatus());
 }
 function watchNet(){
@@ -833,8 +844,9 @@ function watchNet(){
   if(NATIVE && view.name === 'list' && anyOn()){
     if(!upSince) upSince = Date.now();
     updateNet(); netTimer = setInterval(updateNet, 2000);
-  } else if(NATIVE && view.name === 'proxy' && pmain.on){
-    if(!pupSince) pupSince = Date.now();
+  } else if(NATIVE && view.name === 'proxy' && (pmain.on || proxies.some(p => p.on))){
+    if(pmain.on && !pupSince) pupSince = Date.now();
+    if(proxies.some(p => p.on) && !ptSince) ptSince = Date.now();
     updateNet(); netTimer = setInterval(updateNet, 2000);
   }
   if(!anyOn()) upSince = 0;
@@ -886,7 +898,7 @@ let proxies = [];
 try{ const d = JSON.parse(localStorage.getItem(PROXY_STORE)); if(Array.isArray(d)) proxies = d.map(p => ({...p, on:false})); }catch(e){}
 let lastProxyId = null;
 try{ lastProxyId = localStorage.getItem('proxies.last'); }catch(e){}
-function saveProxies(){ try{ localStorage.setItem(PROXY_STORE, JSON.stringify(proxies, (k,v) => k==='on' ? undefined : v)); }catch(e){} }
+function saveProxies(){ try{ localStorage.setItem(PROXY_STORE, JSON.stringify(proxies, (k,v) => (k==='on' || k==='pending') ? undefined : v)); }catch(e){} }
 const proxyTarget = () => proxies.find(p => p.on) || proxies.find(p => p.id === lastProxyId) || proxies[0] || null;
 const isHost = v => (/^[a-z0-9.-]+$/i.test(v) && !/^[.-]|[.-]$/.test(v)) || /^\[?[0-9a-f:]+\]?$/i.test(v);
 
@@ -992,12 +1004,32 @@ function bindProxyMain(){
 
 function setProxyOn(id, on){
   const p = proxies.find(x => x.id === id); if(!p) return;
-  if(NATIVE){ toast('Подключение через прокси ещё в разработке — скоро появится'); render(); return; }
+  if(NATIVE){
+    if(typeof NATIVE.setProxyTunnel !== 'function'){ toast('Прокси-туннели заработают после обновления приложения'); render(); return; }
+    if(on && p.type !== 'SOCKS5'){ toast('Для всего телефона подходит только SOCKS5. HTTP-прокси укажите вручную в настройках браузера'); render(); return; }
+    if(on){ lastProxyId = id; try{ localStorage.setItem('proxies.last', id); }catch(e){} }
+    proxies.forEach(x => x.pending = x.id === id);
+    render();
+    NATIVE.setProxyTunnel(on, JSON.stringify({id:p.id, name:p.name, type:p.type, host:p.host, port:p.port, user:p.user, pass:p.pass}));
+    return;
+  }
   if(on){ lastProxyId = id; try{ localStorage.setItem('proxies.last', id); }catch(e){} }
   proxies.forEach(x => x.on = x.id === id ? on : false);
   render();
   toast(on ? `Прокси ${p.name} включён` : 'Прокси выключен');
 }
+
+// Ответ Android: id включённого прокси-туннеля (или null) и текст ошибки
+let ptSince = 0;
+window.onProxyTunnelState = (id, error) => {
+  const was = proxies.find(x => x.on);
+  proxies.forEach(x => { x.pending = false; x.on = x.id === id; });
+  if(id && (!was || was.id !== id)) ptSince = Date.now();
+  render();
+  const p = proxies.find(x => x.id === id);
+  if(error) toast(error);
+  else toast(p ? `Прокси-туннель ${p.name} включён: весь трафик телефона идёт через него` : 'Прокси-туннель выключен');
+};
 
 function proxyPowerHtml(){
   const on = pmain.on, busy = pmain.pending || pkeyBusy, hasKey = !!pmain.priv;
@@ -1041,9 +1073,9 @@ function renderProxy(){
           <span class="dot"></span>
           <div class="meta">
             <div class="name">${esc(p.name)}</div>
-            <div class="sub">${esc(p.type)} · ${esc(p.host)}:${esc(p.port)}${p.on ? ' · подключён' : ''}</div>
+            <div class="sub">${esc(p.type)} · ${esc(p.host)}:${esc(p.port)}${p.pending ? ' · подождите…' : p.on ? ' · подключён<span class="pt-traffic" id="pt-traffic"></span>' : ''}</div>
           </div>
-          <label class="switch" title="Включить прокси"><input type="checkbox" id="psw-${p.id}" ${p.on ? 'checked' : ''} aria-label="Включить ${esc(p.name)}"><span></span></label>
+          <label class="switch" title="Включить прокси"><input type="checkbox" id="psw-${p.id}" ${p.on ? 'checked' : ''} ${p.pending ? 'disabled' : ''} aria-label="Включить ${esc(p.name)}"><span></span></label>
         </div>`).join('')}</div>`
       : `<div class="empty">${PROXY_SVG(64)}<b>Прокси-туннелей пока нет</b>Нажмите «+», чтобы создать первый.</div>`}
     </main>
@@ -1087,7 +1119,8 @@ function renderProxyEdit(){
             <div class="seg" role="group" aria-label="Тип прокси" style="align-self:flex-start">
               <button type="button" data-ptype="SOCKS5">SOCKS5</button>
               <button type="button" data-ptype="HTTP">HTTP</button>
-            </div></div>
+            </div>
+            <span class="pastenote" id="ptype-hint"></span></div>
           <div class="field"><label for="p-host">Адрес сервера</label>
             <input id="p-host" value="${esc(d.host)}" placeholder="proxy.example.org или 203.0.113.5" spellcheck="false" autocomplete="off">
             <span class="err" id="pe-host" hidden>Укажите адрес: имя сервера или IP, без http:// и порта</span></div>
@@ -1110,6 +1143,9 @@ function renderProxyEdit(){
   bind('#p-name','name'); bind('#p-host','host'); bind('#p-port','port'); bind('#p-user','user'); bind('#p-pass','pass');
   const drawType = () => {
     app.querySelectorAll('[data-ptype]').forEach(b => b.setAttribute('aria-pressed', b.dataset.ptype === d.type));
+    $('#ptype-hint').textContent = d.type === 'SOCKS5'
+      ? 'Переключатель в списке пустит через этот прокси весь трафик телефона'
+      : 'HTTP-прокси нельзя включить на весь телефон — укажите его вручную в настройках браузера. Для всего телефона выберите SOCKS5';
     $('#p-port').placeholder = d.type === 'HTTP' ? '8080' : '1080';
   };
   app.querySelectorAll('[data-ptype]').forEach(b => b.onclick = () => { d.type = b.dataset.ptype; drawType(); });
@@ -1150,7 +1186,8 @@ const PROXY_FAQ = [
   {q:'Что значит «Раздать по Wi-Fi»?', ex:'192.168.1.5:1080', a:`Телефон становится «точкой выхода» для других устройств в той же Wi-Fi сети, например компьютера. На компьютере укажите в настройках прокси адрес телефона, порт, логин и пароль из LocalProxy. Логин и пароль нужны, чтобы прокси не мог использовать кто угодно в этой сети.`},
   {q:'Чем прокси отличается от VPN?', ex:null, a:`VPN шифрует и направляет через сервер весь трафик телефона. Прокси проще: это сервер-посредник, через который идут запросы. Он меняет ваш адрес для сайтов, но сам трафик не шифрует, если сайт и так не открыт по HTTPS. Прокси удобен, когда нужен другой адрес для отдельного сервиса, например Telegram.`},
   {q:'Название', ex:'telegram', a:`Любое имя, чтобы отличать прокси в списке. До 20 символов.`},
-  {q:'Тип: SOCKS5 или HTTP', ex:'SOCKS5', a:`<b>SOCKS5</b> подходит для любых приложений, в том числе звонков и игр. Выбирайте его, если сервер поддерживает. <b>HTTP</b> работает в основном для сайтов и браузеров. Тип указан там, где вы взяли прокси.`},
+  {q:'Тип: SOCKS5 или HTTP', ex:'SOCKS5', a:`<b>SOCKS5</b> подходит для любых приложений, в том числе звонков и игр, и только его можно включить на весь телефон переключателем в списке. <b>HTTP</b> работает в основном для сайтов: его указывают вручную в настройках браузера. Тип указан там, где вы взяли прокси.`},
+  {q:'Как включить прокси-туннель?', ex:'SOCKS5 · proxy.example.org:1080', a:`Создайте туннель кнопкой «+», выберите <b>SOCKS5</b> и включите переключатель в списке. Android один раз спросит разрешение на VPN — нажмите «ОК». После этого весь трафик телефона, включая адреса сайтов, идёт через ваш прокси-сервер, а в строке туннеля видно, сколько данных прошло. Одновременно с VPN из LocalVPN прокси-туннель не работает: на телефоне может быть включён только один VPN. Звонки и некоторые игры используют UDP — они заработают, только если ваш прокси-сервер его поддерживает.`},
   {q:'Адрес сервера', ex:'proxy.example.org', a:`Имя или IP-адрес прокси-сервера. Пишите только адрес, без <code>http://</code> и без порта.`},
   {q:'Порт', ex:'1080', a:`Номер порта прокси-сервера. Обычно <code>1080</code> для SOCKS5 и <code>8080</code> или <code>3128</code> для HTTP, но точное значение даёт владелец сервера.`},
   {q:'Логин и пароль', ex:'user / ••••••', a:`Нужны, только если сервер их требует. Тогда их выдают вместе с адресом. Публичные прокси обычно работают без них.`},

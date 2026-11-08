@@ -64,6 +64,7 @@ object VpnController {
                 val tunnel = synchronized(tunnels) { tunnels.getOrPut(name) { NamedTunnel(name) } }
                 if (on) {
                     if (ProxyController.isRunning()) throw IllegalStateException("Сначала выключите прокси: прокси и VPN не работают одновременно")
+                    if (ProxyTunnels.running() != null) throw IllegalStateException("Сначала выключите прокси-туннель в LocalProxy: на телефоне может работать только один VPN")
                     val config = Config.parse(ByteArrayInputStream(configText.toByteArray(Charsets.UTF_8)))
                     if (config.peers.isEmpty()) throw IllegalStateException("Добавьте пир: без сервера туннелю некуда подключаться")
                     for (pkg in config.getInterface().includedApplications) {
