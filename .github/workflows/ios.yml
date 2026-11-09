@@ -53,7 +53,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} "${ad[@]}" \
             build > xcodebuild.log 2>&1 || status=$?
-          grep -E "error:|BUILD (SUCCEEDED|FAILED)" xcodebuild.log | sort -u | head -80 || true
+          grep -E "error:|note:|BUILD (SUCCEEDED|FAILED)" xcodebuild.log | sort -u | head -80 || true
           exit $status
 
       - name: Упаковать .ipa (без подписи)

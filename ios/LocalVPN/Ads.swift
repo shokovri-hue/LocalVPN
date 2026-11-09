@@ -80,6 +80,10 @@ final class Ads: NSObject, InterstitialAdDelegate {
         finished(interstitialAd)
     }
 
+    func interstitialAdDidClick(_ interstitialAd: InterstitialAd) {}
+
+    func interstitialAd(_ interstitialAd: InterstitialAd, didTrackImpression impressionData: ImpressionData?) {}
+
     private func finished(_ shown: InterstitialAd) {
         shown.delegate = nil
         if ad === shown { ad = nil }
