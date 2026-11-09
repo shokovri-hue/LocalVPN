@@ -13,6 +13,14 @@ jobs:
       - name: Получить код
         uses: actions/checkout@v4
 
+      # SDK Яндекса (через AppMetrica) собирается только новым Xcode 26 — берём самый свежий
+      - name: Выбрать Xcode
+        run: |
+          ls -d /Applications/Xcode_*.app
+          x=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)
+          sudo xcode-select -s "$x"
+          xcodebuild -version
+
       - name: Установить Go
         uses: actions/setup-go@v5
         with:
