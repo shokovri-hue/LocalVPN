@@ -543,7 +543,7 @@ window.onTunnelState = (running, error) => {
   tunnels.forEach(x => { x.pending = false; x.on = running.includes(x.name); });
   main.pending = false; main.on = running.includes(MAIN_NAME);
   save(); render();
-  if(error) toast(error); else toast(running.length ? 'VPN подключён' : 'VPN отключён');
+  if(error) toast(error); else { toast(running.length ? 'VPN подключён' : 'VPN отключён'); adMoment(); }
 };
 // После изменения настроек работающего туннеля переподключаем его с новым конфигом
 function reapplyRunning(oldName){
@@ -804,6 +804,11 @@ function backupPrompts(){
   if(!st.folder && hasAnyData() && !flag('backup.asked') && ['list','proxy'].includes(view.name)) askBackup();
 }
 
+// Естественный момент для рекламы Яндекса: приложение само решает, пора ли (не чаще раза в 7 минут)
+function adMoment(){
+  try{ if(NATIVE && typeof NATIVE.adMoment === 'function') setTimeout(() => NATIVE.adMoment(), 400); }catch(e){}
+}
+
 function render(){
   setTimeout(watchNet, 0);
   setTimeout(backupPrompts, 600);
@@ -997,8 +1002,8 @@ function renderHome(){
       </div>
       </div>
     </main>`;
-  $('#start-open').onclick = () => go({name:'list'});
-  $('#start-proxy').onclick = () => go({name:'proxy'});
+  $('#start-open').onclick = () => { go({name:'list'}); adMoment(); };
+  $('#start-proxy').onclick = () => { go({name:'proxy'}); adMoment(); };
   const top = $('#topmenu'), btn = $('#home-menu');
   btn.onclick = e => { e.stopPropagation(); top.hidden = !top.hidden; btn.setAttribute('aria-expanded', !top.hidden); };
   document.onclick = e => { if(!e.target.closest('#topmenu')){ top.hidden = true; btn.setAttribute('aria-expanded','false'); } };
@@ -1061,7 +1066,7 @@ function setPmainOn(on){
 window.onProxyState = (up, error) => {
   if(up && !pmain.on) pupSince = Date.now();
   pmain.pending = false; pmain.on = !!up; render();
-  if(error) toast(error); else toast(up ? 'Прокси запущен' : 'Прокси остановлен');
+  if(error) toast(error); else { toast(up ? 'Прокси запущен' : 'Прокси остановлен'); adMoment(); }
 };
 function lanAddress(){
   try{ const ip = NATIVE && typeof NATIVE.getLanIp === 'function' ? NATIVE.getLanIp() : ''; if(ip) return ip; }catch(e){}
@@ -1147,7 +1152,7 @@ window.onProxyTunnelState = (id, error) => {
   render();
   const p = proxies.find(x => x.id === id);
   if(error) toast(error);
-  else toast(p ? `Прокси-туннель ${p.name} включён: весь трафик телефона идёт через него` : 'Прокси-туннель выключен');
+  else { toast(p ? `Прокси-туннель ${p.name} включён: весь трафик телефона идёт через него` : 'Прокси-туннель выключен'); adMoment(); }
 };
 
 function proxyPowerHtml(){

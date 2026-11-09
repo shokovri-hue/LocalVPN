@@ -52,6 +52,7 @@ jobs:
         env:
           LOCALVPN_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || vars.KEYSTORE_PASSWORD }}
           LOCALVPN_KEY_ALIAS: ${{ secrets.KEY_ALIAS || vars.KEY_ALIAS }}
+          YANDEX_AD_UNIT_ID: ${{ vars.YANDEX_AD_UNIT_ID }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Переименовать файл

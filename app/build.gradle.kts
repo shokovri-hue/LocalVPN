@@ -10,6 +10,9 @@ plugins {
 val keystorePath: String? = System.getenv("LOCALVPN_KEYSTORE_FILE")
 val hasReleaseKey = keystorePath != null && file(keystorePath).exists()
 val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+// ID рекламного блока Яндекса: переменная YANDEX_AD_UNIT_ID в настройках GitHub (Variables).
+// Без неё — тестовый блок Яндекса: реклама видна, но денег не приносит.
+val yandexAdUnitId = System.getenv("YANDEX_AD_UNIT_ID")?.takeIf { it.isNotBlank() } ?: "demo-interstitial-yandex"
 
 android {
     namespace = "app.localvpn"
@@ -21,6 +24,7 @@ android {
         targetSdk = 36 // Android 16: Google Play Protect меньше настораживают приложения под свежий Android
         versionCode = buildNumber
         versionName = "1.0.$buildNumber"
+        buildConfigField("String", "YANDEX_AD_UNIT_ID", "\"$yandexAdUnitId\"")
     }
 
     signingConfigs {
@@ -46,6 +50,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
     }
+    buildFeatures {
+        buildConfig = true
+    }
     lint {
         checkReleaseBuilds = false
         abortOnError = false
@@ -67,5 +74,6 @@ dependencies {
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("androidx.work:work-runtime:2.9.1") // фоновая проверка обновлений
     implementation("androidx.documentfile:documentfile:1.0.1") // резервная копия в папке пользователя
+    implementation("com.yandex.android:mobileads:8.6.0") // реклама Рекламной сети Яндекса
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

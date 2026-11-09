@@ -171,6 +171,9 @@ class MainActivity : ComponentActivity() {
         // Прокси-туннель могли выключить извне (другое VPN-приложение) — сообщаем странице
         ProxyTunnels.setListener { id, error -> deliverProxyTunnel(id, error) }
 
+        // Реклама Яндекса: загружаем заранее, показываем в естественные моменты не чаще раза в 7 минут
+        Ads.start(this)
+
         // Фоновая проверка обновлений раз в 12 часов (по Wi-Fi)
         UpdateWorker.schedule(applicationContext)
 
@@ -196,6 +199,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         Updater.setListener(null)
         ProxyTunnels.setListener(null)
+        Ads.destroy()
         web.destroy()
         super.onDestroy()
     }
@@ -290,6 +294,12 @@ class MainActivity : ComponentActivity() {
         /** Адрес телефона в Wi-Fi сети — для раздачи прокси другим устройствам. */
         @JavascriptInterface
         fun getLanIp(): String = ProxyController.lanIp()
+
+        /** Естественный момент для рекламы (страница вызывает при смене экрана и включении/выключении). */
+        @JavascriptInterface
+        fun adMoment() {
+            runOnUiThread { Ads.moment(this@MainActivity) }
+        }
 
         // ===== Резервная копия =====
         @JavascriptInterface
