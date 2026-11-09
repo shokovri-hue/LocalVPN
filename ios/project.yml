@@ -22,6 +22,9 @@ packages:
   Tun2SocksKit:
     url: https://github.com/EbrahimTahernejad/Tun2SocksKit
     exactVersion: 5.16.0
+  YandexMobileAds:
+    url: https://github.com/yandexmobile/yandex-ads-sdk-ios
+    exactVersion: 8.6.0
 
 targets:
   LocalVPN:
@@ -42,8 +45,12 @@ targets:
         INFOPLIST_FILE: LocalVPN/Info.plist
         CODE_SIGN_ENTITLEMENTS: LocalVPN/LocalVPN.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # ID межстраничного блока РСЯ для iOS; без него — тестовая реклама Яндекса
+        YANDEX_AD_UNIT_ID: demo-interstitial-yandex
     dependencies:
       - target: PacketTunnel
+      - package: YandexMobileAds
+        product: YandexMobileAds
       - sdk: NetworkExtension.framework
 
   PacketTunnel:

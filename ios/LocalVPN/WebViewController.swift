@@ -98,7 +98,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             getVersion: function(){ return S.version; },
             getInstalledApps: function(){ return '[]'; },
             isInstalled: function(){ return false; },
-            copy: function(t){ post('copy', t); }
+            copy: function(t){ post('copy', t); },
+            adMoment: function(){ post('adMoment'); }
           };
         })();
         """
@@ -182,6 +183,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         case "writeBackup": Backup.write(str(0)) { [weak self] in self?.pushState() }
         case "disableBackup": Backup.disable(); pushState()
         case "copy": UIPasteboard.general.string = str(0)
+        case "adMoment": Ads.shared.moment(from: self)
         default: break
         }
     }
