@@ -35,13 +35,14 @@ jobs:
       - name: Собрать приложение (без подписи)
         working-directory: ios
         run: |
-          set -o pipefail
+          status=0
           xcodebuild -project LocalVPN.xcodeproj -scheme LocalVPN -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
-            build | tee xcodebuild.log | grep -E "error:|warning: unused|BUILD (SUCCEEDED|FAILED)" || true
-          test -d build/Build/Products/Release-iphoneos/LocalVPN.app
+            build > xcodebuild.log 2>&1 || status=$?
+          grep -E "error:|BUILD (SUCCEEDED|FAILED)" xcodebuild.log | sort -u | head -80 || true
+          exit $status
 
       - name: Упаковать .ipa (без подписи)
         working-directory: ios

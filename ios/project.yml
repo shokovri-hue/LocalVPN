@@ -62,8 +62,8 @@ targets:
         INFOPLIST_FILE: PacketTunnel/Info.plist
         CODE_SIGN_ENTITLEMENTS: PacketTunnel/PacketTunnel.entitlements
         APPLICATION_EXTENSION_API_ONLY: YES
-        # Модули WireGuardKitC (C-код ключей) и WireGuardKitGo (движок AmneziaWG на Go)
-        SWIFT_INCLUDE_PATHS: "$(PROJECT_DIR)/PacketTunnel/WireGuardKitC $(PROJECT_DIR)/vendor/WireGuardKitGo"
+        # C-код ключей (WireGuardKitC) и движок AmneziaWG на Go (vendor/WireGuardKitGo)
+        SWIFT_OBJC_BRIDGING_HEADER: PacketTunnel/PacketTunnel-Bridging-Header.h
         HEADER_SEARCH_PATHS: "$(PROJECT_DIR)/PacketTunnel/WireGuardKitC $(PROJECT_DIR)/vendor/WireGuardKitGo"
         LIBRARY_SEARCH_PATHS: "$(PROJECT_DIR)/vendor/WireGuardKitGo/out"
         OTHER_LDFLAGS: "-lwg-go -lresolv"
