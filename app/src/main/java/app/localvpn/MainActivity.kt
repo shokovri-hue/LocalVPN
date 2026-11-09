@@ -129,13 +129,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        Updater.appVisible = true
         Updater.check(this, false)
         web.evaluateJavascript("window.onAppResume && window.onAppResume()", null)
     }
 
     override fun onPause() {
-        Updater.appVisible = false
         super.onPause()
     }
 
@@ -242,7 +240,7 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun getLanIp(): String = ProxyController.lanIp()
 
-        // ===== Автообновление =====
+        // ===== Обновления =====
         @JavascriptInterface
         fun getVersion(): String = Updater.versionName(this@MainActivity)
 
@@ -252,24 +250,9 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun checkUpdate(force: Boolean) = Updater.check(this@MainActivity, force)
 
+        /** Открывает скачивание новой версии в браузере — устанавливает человек сам. */
         @JavascriptInterface
-        fun downloadUpdate() = Updater.download(this@MainActivity)
-
-        /** false — нужно разрешение «Установка из этого источника» (страница предложит его выдать). */
-        @JavascriptInterface
-        fun installUpdate(): Boolean = Updater.install(this@MainActivity)
-
-        @JavascriptInterface
-        fun openInstallSettings() {
-            runOnUiThread {
-                try {
-                    startActivity(
-                        Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:$packageName"))
-                    )
-                } catch (e: Exception) {
-                }
-            }
-        }
+        fun openUpdate() = Updater.open(this@MainActivity)
 
         /** Статистика работающего туннеля для индикатора «связь с сервером». */
         @JavascriptInterface
