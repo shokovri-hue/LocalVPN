@@ -65,14 +65,14 @@ public class WireGuardAdapter {
 
     /// Tunnel device file descriptor.
     private var tunnelFileDescriptor: Int32? {
-        var ctlInfo = ctl_info()
+        var ctlInfo = wg_ctl_info()
         withUnsafeMutablePointer(to: &ctlInfo.ctl_name) {
             $0.withMemoryRebound(to: CChar.self, capacity: MemoryLayout.size(ofValue: $0.pointee)) {
                 _ = strcpy($0, "com.apple.net.utun_control")
             }
         }
         for fd: Int32 in 0...1024 {
-            var addr = sockaddr_ctl()
+            var addr = wg_sockaddr_ctl()
             var ret: Int32 = -1
             var len = socklen_t(MemoryLayout.size(ofValue: addr))
             withUnsafeMutablePointer(to: &addr) {
