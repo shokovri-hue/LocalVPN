@@ -127,11 +127,16 @@ class MainActivity : ComponentActivity() {
             }
         }
         web.addJavascriptInterface(Bridge(), "Android")
-        setContentView(web)
         // С целевой версией Android 15+ окно рисуется во весь экран, под системными панелями.
-        // Отступаем на высоту строки состояния, панели навигации, выреза камеры и клавиатуры.
+        // Сама страница отступы не учитывает, поэтому кладём её в контейнер и отступаем
+        // контейнером на высоту строки состояния, панели навигации, выреза камеры и клавиатуры.
+        val root = android.widget.FrameLayout(this)
+        root.setBackgroundColor(getColor(R.color.screen_bg))
+        root.addView(web, android.widget.FrameLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+        setContentView(root)
         if (Build.VERSION.SDK_INT >= 35) {
-            web.setOnApplyWindowInsetsListener { v, insets ->
+            root.setOnApplyWindowInsetsListener { v, insets ->
                 val bars = insets.getInsets(
                     android.view.WindowInsets.Type.systemBars() or
                         android.view.WindowInsets.Type.displayCutout() or
