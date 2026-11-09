@@ -59,6 +59,39 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    // Резервная копия: системное окно выбора папки. restore — восстановить из неё, иначе — сохранять в неё.
+    private var backupRestore = false
+    private val pickBackupFolder =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            val restore = backupRestore
+            if (uri == null) {
+                jsCall(if (restore) "onBackupRestore" else "onBackupFolder", null, null)
+                return@registerForActivityResult
+            }
+            background.execute {
+                try {
+                    if (restore) {
+                        val text = Backup.read(this, uri)
+                        Backup.rememberFolder(this, uri) // дальше копия сохраняется в ту же папку
+                        jsCall("onBackupRestore", text, null)
+                    } else {
+                        Backup.rememberFolder(this, uri)
+                        jsCall("onBackupFolder", Backup.folderName(this, uri), null)
+                    }
+                } catch (e: Throwable) {
+                    jsCall(if (restore) "onBackupRestore" else "onBackupFolder", null, e.message ?: "Не удалось открыть папку")
+                }
+            }
+        }
+
+    /** Вызывает window.<fn>(value, error) на странице; строки передаются как JSON-строки. */
+    private fun jsCall(fn: String, value: String?, error: String?) {
+        val js = "window.$fn && window.$fn(" +
+            (if (value == null) "null" else JSONObject.quote(value)) + ", " +
+            (if (error == null) "null" else JSONObject.quote(error)) + ")"
+        runOnUiThread { if (!isDestroyed) web.evaluateJavascript(js, null) }
+    }
+
     // Android 13+: разрешение показывать уведомление «LocalProxy работает». Прокси запускается в любом случае.
     private val notifyPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -252,6 +285,27 @@ class MainActivity : ComponentActivity() {
         /** Адрес телефона в Wi-Fi сети — для раздачи прокси другим устройствам. */
         @JavascriptInterface
         fun getLanIp(): String = ProxyController.lanIp()
+
+        // ===== Резервная копия =====
+        @JavascriptInterface
+        fun backupStatus(): String = Backup.status(this@MainActivity)
+
+        /** restore=false — выбрать папку для копий; true — выбрать папку и восстановить из неё. */
+        @JavascriptInterface
+        fun chooseBackupFolder(restore: Boolean) {
+            runOnUiThread {
+                backupRestore = restore
+                try { pickBackupFolder.launch(null) } catch (e: Exception) {
+                    jsCall(if (restore) "onBackupRestore" else "onBackupFolder", null, "Не удалось открыть выбор папки")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun writeBackup(json: String) = Backup.write(this@MainActivity, json)
+
+        @JavascriptInterface
+        fun disableBackup() = Backup.disable(this@MainActivity)
 
         // ===== Обновления =====
         @JavascriptInterface
