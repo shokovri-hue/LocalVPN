@@ -7,3 +7,8 @@ local.properties
 *.jks
 *.keystore
 captures/
+ios/vendor/
+ios/build/
+ios/out/
+ios/*.xcodeproj/
+ios/xcodebuild.log

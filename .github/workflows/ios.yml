@@ -1,0 +1,67 @@
+name: Сборка iOS
+
+# Только ветка ios и кнопка «Run workflow»: Android-сборку и релизы эта проверка не трогает
+on:
+  push:
+    branches: [ios]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Получить код
+        uses: actions/checkout@v4
+
+      - name: Установить Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          cache: false
+
+      - name: Установить XcodeGen
+        run: brew install xcodegen
+
+      - name: Собрать страницу
+        run: python3 tools/build_web.py
+
+      - name: Собрать движок AmneziaWG
+        run: ios/scripts/build-wg-go.sh
+
+      - name: Создать проект Xcode
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Собрать приложение (без подписи)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project LocalVPN.xcodeproj -scheme LocalVPN -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            build | tee xcodebuild.log | grep -E "error:|warning: unused|BUILD (SUCCEEDED|FAILED)" || true
+          test -d build/Build/Products/Release-iphoneos/LocalVPN.app
+
+      - name: Упаковать .ipa (без подписи)
+        working-directory: ios
+        run: |
+          mkdir -p out/Payload
+          cp -R build/Build/Products/Release-iphoneos/LocalVPN.app out/Payload/
+          cd out && zip -qr LocalVPN-unsigned.ipa Payload
+          ls -lh LocalVPN-unsigned.ipa
+          du -sh Payload/LocalVPN.app/PlugIns/*
+
+      - name: Сохранить результат
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalVPN-ios-unsigned
+          path: ios/out/LocalVPN-unsigned.ipa
+
+      - name: Журнал сборки
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ios/xcodebuild.log
+          if-no-files-found: ignore

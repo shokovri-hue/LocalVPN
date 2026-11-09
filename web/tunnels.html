@@ -454,6 +454,8 @@ const APPS = [
 ];
 // ===== Мост к Android-приложению (в браузере window.Android нет, всё работает как раньше) =====
 const NATIVE = window.Android || null;
+// iPhone: тот же интерфейс, но без выбора приложений, LocalProxy в фоне и проверки обновлений (их делает App Store)
+const IOS = !!(NATIVE && NATIVE.isIOS);
 let installedApps = null; // в приложении — реальный список установленных программ
 function srcApps(){
   if(!NATIVE) return APPS;
@@ -638,6 +640,7 @@ function awgSummary(t){
 const isPkg = v => /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(v.trim());
 let route = {mode:'all', app:null};
 try{ const r = JSON.parse(localStorage.getItem('tunnels.route')); if(r && (r.mode==='all' || (r.mode==='app' && r.app?.p))) route = r; }catch(e){}
+if(IOS) route = {mode:'all', app:null}; // на iPhone VPN всегда для всего устройства
 let appPrefs = {sort:'abc', fav:[]};
 try{ const p = JSON.parse(localStorage.getItem('tunnels.apps')); if(p){ appPrefs.sort = p.sort==='rnd'?'rnd':'abc'; appPrefs.fav = Array.isArray(p.fav)?p.fav:[]; } }catch(e){}
 function saveAppPrefs(){ try{ localStorage.setItem('tunnels.apps', JSON.stringify(appPrefs)); }catch(e){} }
@@ -954,7 +957,7 @@ function renderHome(){
   app.innerHTML = `
     <button class="iconbtn start-menu" id="home-menu" aria-label="Меню" aria-haspopup="true" aria-expanded="false">${ICON.burger}</button>
     <div class="topmenu left" id="topmenu" hidden>
-      <button id="h-upd">${ICON.refresh} Проверить обновления<span class="ver">${esc(versionLabel())}</span></button>
+      ${IOS ? '' : `<button id="h-upd">${ICON.refresh} Проверить обновления<span class="ver">${esc(versionLabel())}</span></button>`}
       <button id="h-bak">${ICON.save} Резервная копия</button>
     </div>
     <main class="start">
@@ -989,7 +992,7 @@ function renderHome(){
   const top = $('#topmenu'), btn = $('#home-menu');
   btn.onclick = e => { e.stopPropagation(); top.hidden = !top.hidden; btn.setAttribute('aria-expanded', !top.hidden); };
   document.onclick = e => { if(!e.target.closest('#topmenu')){ top.hidden = true; btn.setAttribute('aria-expanded','false'); } };
-  $('#h-upd').onclick = () => { top.hidden = true; checkUpdatesNow(); };
+  if($('#h-upd')) $('#h-upd').onclick = () => { top.hidden = true; checkUpdatesNow(); };
   $('#h-bak').onclick = () => { top.hidden = true; backupMenu(); };
 }
 
@@ -1137,6 +1140,14 @@ window.onProxyTunnelState = (id, error) => {
   else { toast(p ? `Прокси-туннель ${p.name} включён: весь трафик телефона идёт через него` : 'Прокси-туннель выключен'); adMoment(); }
 };
 
+// На iPhone свёрнутое приложение засыпает, поэтому локальный прокси для Telegram там не работает —
+// остаются прокси-туннели на весь телефон
+function iosProxyNote(){
+  return `<div class="power proxy off">
+      <div class="power-label">Прокси-туннели</div>
+      <div class="power-sub">Добавьте SOCKS5-сервер кнопкой «+» и включите его — через прокси пойдёт весь трафик iPhone</div>
+    </div>`;
+}
 function proxyPowerHtml(){
   const on = pmain.on, busy = pmain.pending || pkeyBusy, hasKey = !!pmain.priv;
   const state = busy ? 'busy' : on ? 'on' : 'off';
@@ -1165,7 +1176,7 @@ function renderProxy(){
   app.innerHTML = `
     <header class="hero">
       <button class="iconbtn" id="to-home" aria-label="На стартовый экран">${ICON.back}</button>
-      ${proxyPowerHtml()}
+      ${IOS ? iosProxyNote() : proxyPowerHtml()}
       <button class="iconbtn" id="more" aria-label="Ещё" aria-haspopup="true" aria-expanded="false">${ICON.more}</button>
       <div class="topmenu" id="topmenu" hidden>
         <button id="pm-faq">${ICON.help} FAQ: как создать туннель</button>
@@ -1187,8 +1198,10 @@ function renderProxy(){
     <button class="fab proxy" id="pfab" aria-label="Добавить прокси-туннель">${ICON.plus}</button>`;
 
   $('#to-home').onclick = () => go({name:'home'});
-  $('#ppower').onclick = e => { e.stopPropagation(); setPmainOn(!pmain.on); };
-  bindProxyMain();
+  if(!IOS){
+    $('#ppower').onclick = e => { e.stopPropagation(); setPmainOn(!pmain.on); };
+    bindProxyMain();
+  }
   $('#pfab').onclick = () => go({name:'proxy-edit', id:null});
   app.querySelectorAll('.row').forEach(r => {
     const id = r.dataset.id;
@@ -1342,7 +1355,7 @@ function renderList(){
       : `<div class="empty">${ICON.shield}<b>Туннелей пока нет</b>Нажмите «+», чтобы создать первый.
           <div><button type="button" class="small" id="see-ex" style="margin-top:18px">Посмотреть примеры</button></div></div>`}
     </main>
-    <div class="modebar">
+    <div class="modebar" ${IOS ? 'hidden' : ''}>
       <span class="ml left ${route.mode==='all'?'active':''}">VPN для всего устройства</span>
       <label class="switch" title="Переключить режим"><input type="checkbox" id="route-sw" ${route.mode==='app'?'checked':''} aria-label="Только для одного приложения"><span></span></label>
       <button type="button" class="ml right ${route.mode==='app'?'active':''}" id="route-app">${route.mode==='app'
