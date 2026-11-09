@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-15-intel # у Mac на ARM в GitHub сейчас очереди
     steps:
       - name: Получить код
         uses: actions/checkout@v4
