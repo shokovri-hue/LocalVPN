@@ -18,7 +18,7 @@ android {
     defaultConfig {
         applicationId = "app.localvpn"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36 // Android 16: Google Play Protect меньше настораживают приложения под свежий Android
         versionCode = buildNumber
         versionName = "1.0.$buildNumber"
     }

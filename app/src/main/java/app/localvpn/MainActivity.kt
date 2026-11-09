@@ -95,6 +95,19 @@ class MainActivity : ComponentActivity() {
         }
         web.addJavascriptInterface(Bridge(), "Android")
         setContentView(web)
+        // С целевой версией Android 15+ окно рисуется во весь экран, под системными панелями.
+        // Отступаем на высоту строки состояния, панели навигации, выреза камеры и клавиатуры.
+        if (Build.VERSION.SDK_INT >= 35) {
+            web.setOnApplyWindowInsetsListener { v, insets ->
+                val bars = insets.getInsets(
+                    android.view.WindowInsets.Type.systemBars() or
+                        android.view.WindowInsets.Type.displayCutout() or
+                        android.view.WindowInsets.Type.ime()
+                )
+                v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+                android.view.WindowInsets.CONSUMED
+            }
+        }
 
         if (savedInstanceState != null) web.restoreState(savedInstanceState)
         if (web.url == null) web.loadUrl("https://$ASSET_HOST/assets/index.html")
